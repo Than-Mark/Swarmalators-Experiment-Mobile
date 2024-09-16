@@ -302,7 +302,8 @@ class PatternFormation(Swarmalators2D):
 
 class GSPatternFormation(PatternFormation):
     def __init__(self, strengthLambda: float, alpha: float, boundaryLength: float = 10, 
-                 productRateK0: float = 1, decayRateKd: float = 1, c0: float = 5, 
+                 productRateUK0: float = 1, productRateVK0: float = 1,
+                 decayRateKd: float = 1, c0: float = 5, 
                  chemoBetaU: float = 1, chemoBetaV: float = 1, 
                  diffusionRateDc: float = 1, epsilon: float = 10, cellNumInLine: int = 50, 
                  typeA: str = "distanceWgt", agentsNum: int=1000, dt: float=0.01, 
@@ -325,7 +326,8 @@ class GSPatternFormation(PatternFormation):
         self.cPosition = np.array(list(product(np.linspace(0, boundaryLength, cellNumInLine), repeat=2)))
         self.dx = boundaryLength / (cellNumInLine - 1)
         self.agentsNum = agentsNum
-        self.productRateK0 = productRateK0
+        self.productRateUK0 = productRateUK0
+        self.productRateVK0 = productRateVK0
         self.decayRateKd = decayRateKd
         self.diffusionRateDc = diffusionRateDc
         self.c0 = c0
@@ -380,21 +382,27 @@ class GSPatternFormation(PatternFormation):
 
     @staticmethod
     @nb.njit
-    def _product_c(cellNumInLine: int, ocsiIdx: np.ndarray):
+    def _product_c(cellNumInLine: int, ocsiIdx: np.ndarray, productRateK0: float):
         productC = np.zeros((cellNumInLine, cellNumInLine), dtype=np.float64)
         for idx in ocsiIdx:
             productC[idx[0], idx[1]] = productC[idx[0], idx[1]] + 1
-        return productC
+        return productC * productRateK0
 
     @property
     def productU(self):
-        value = self._product_c(self.cellNumInLine, self.temp["ocsiIdx"][:self.halfAgentsNum])
-        return self._reshape_product_c(value, self.cellNumInLine)
+        return self._product_c(
+            self.cellNumInLine, 
+            self.temp["ocsiIdx"][:self.halfAgentsNum],
+            self.productRateUK0
+        )
     
     @property
     def productV(self):
-        value = self._product_c(self.cellNumInLine, self.temp["ocsiIdx"][self.halfAgentsNum:])
-        return self._reshape_product_c(value, self.cellNumInLine)
+        return self._product_c(
+            self.cellNumInLine, 
+            self.temp["ocsiIdx"][self.halfAgentsNum:],
+            self.productRateVK0
+        )
 
     @property
     def chemotactic(self):
@@ -504,7 +512,9 @@ class GSPatternFormation(PatternFormation):
             
             name =  (
                 f"GSPF_K{self.strengthLambda:.3f}_a{self.alpha:.2f}"
-                f"_b{self.chemotacticStrengthBetaR:.1f}"
+                f"_bu{self.chemoBetaU:.1f}_bv{self.chemoBetaV:.1f}"
+                f"_pu{self.productRateUK0}_pv{self.productRateVK0}"
+                f"_Kd{self.decayRateKd}_Dc{self.diffusionRateDc}"
                 f"_r{self.randomSeed}"
             )
             
