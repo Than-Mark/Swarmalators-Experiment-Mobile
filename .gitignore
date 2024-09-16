@@ -1,0 +1,15 @@
+*.png
+*.mp4
+*.gif
+*.npz
+*.zip
+*.pyc
+*.svg
+*.h5
+*.csv
+*.eps
+test.ipynb
+*.xlsx
+*.npy
+*.parquet
+*/.ipynb_checkpoints/
