@@ -303,25 +303,22 @@ class PatternFormation(Swarmalators2D):
 class GSPatternFormation(PatternFormation):
     def __init__(self, strengthLambda: float, alpha: float, boundaryLength: float = 10, 
                  productRateUK0: float = 1, productRateVK0: float = 1,
-                 decayRateKd: float = 1, c0: float = 5, 
+                 decayRateKd: float = 1, 
                  chemoBetaU: float = 1, chemoBetaV: float = 1, 
-                 diffusionRateDc: float = 1, epsilon: float = 10, cellNumInLine: int = 50, 
+                 diffusionRateDu: float = 1, diffusionRateDv: float = 1, 
+                 cellNumInLine: int = 50, 
                  typeA: str = "distanceWgt", agentsNum: int=1000, dt: float=0.01, 
                  tqdm: bool = False, savePath: str = None, shotsnaps: int = 10, 
                  distribution: str = "uniform", randomSeed: int = 10, overWrite: bool = False) -> None:
-        self.u = np.random.rand(cellNumInLine, cellNumInLine)
-        self.v = np.random.rand(cellNumInLine, cellNumInLine)
-        self.chemoBetaU = chemoBetaU
-        self.chemoBetaV = chemoBetaV
-        self.halfAgentsNum = agentsNum // 2
 
         assert distribution in ["uniform"]
         assert typeA in ["distanceWgt"]
 
+        self.halfAgentsNum = agentsNum // 2
+
         np.random.seed(randomSeed)
         self.positionX = np.random.random((agentsNum, 2)) * boundaryLength
         self.phaseTheta = np.random.random(agentsNum) * 2 * np.pi - np.pi
-        self.c = np.random.rand(cellNumInLine, cellNumInLine)
         self.cellNumInLine = cellNumInLine
         self.cPosition = np.array(list(product(np.linspace(0, boundaryLength, cellNumInLine), repeat=2)))
         self.dx = boundaryLength / (cellNumInLine - 1)
@@ -329,21 +326,20 @@ class GSPatternFormation(PatternFormation):
         self.productRateUK0 = productRateUK0
         self.productRateVK0 = productRateVK0
         self.decayRateKd = decayRateKd
-        self.diffusionRateDc = diffusionRateDc
-        self.c0 = c0
-        self.epsilon = epsilon
+        self.diffusionRateDu = diffusionRateDu
+        self.diffusionRateDv = diffusionRateDv
         self.dt = dt
         self.speedV = 3
         self.alpha = alpha
         if distribution == "uniform":
             self.omegaTheta = np.concatenate([
-                np.random.uniform(1, 3, size=agentsNum // 2),
-                np.random.uniform(-3, -1, size=agentsNum // 2)
+                np.random.uniform(1, 3, size=self.halfAgentsNum),
+                np.random.uniform(-3, -1, size=self.halfAgentsNum)
             ])
         elif distribution == "normal":
             self.omegaTheta = np.concatenate([
-                np.random.normal(loc=3, scale=0.5, size=agentsNum // 2),
-                np.random.normal(loc=-3, scale=0.5, size=agentsNum // 2)
+                np.random.normal(loc=3, scale=0.5, size=self.halfAgentsNum),
+                np.random.normal(loc=-3, scale=0.5, size=self.halfAgentsNum)
             ])
 
         self.typeA = typeA
@@ -357,6 +353,17 @@ class GSPatternFormation(PatternFormation):
         self.halfBoundaryLength = boundaryLength / 2
         self.randomSeed = randomSeed
         self.overWrite = overWrite
+
+        self.u = np.random.rand(cellNumInLine, cellNumInLine)
+        self.v = np.random.rand(cellNumInLine, cellNumInLine)
+        self.chemoBetaUArray = chemoBetaU * np.concatenate([
+            np.zeros(self.halfAgentsNum), np.ones(self.halfAgentsNum)
+        ])
+        self.chemoBetaVArray = chemoBetaV * np.concatenate([
+            np.ones(self.halfAgentsNum), np.zeros(self.halfAgentsNum)
+        ])
+        self.chemoBetaU = chemoBetaU
+        self.chemoBetaV = chemoBetaV
 
         self.temp = dict()
         # The order of variable definitions has a dependency relationship
@@ -408,10 +415,10 @@ class GSPatternFormation(PatternFormation):
     def chemotactic(self):
         localGradU = self.nablaU[self.temp["ocsiIdx"][:, 0], self.temp["ocsiIdx"][:, 1]]
         localGradV = self.nablaV[self.temp["ocsiIdx"][:, 0], self.temp["ocsiIdx"][:, 1]]
-        return self.chemoBetaU * (
+        return self.chemoBetaUArray * (
             self.temp["direction"][:, 0] * localGradU[:, 1] - 
             self.temp["direction"][:, 1] * localGradU[:, 0]
-        ) + self.chemoBetaV * (
+        ) + self.chemoBetaVArray * (
             self.temp["direction"][:, 0] * localGradV[:, 1] -
             self.temp["direction"][:, 1] * localGradV[:, 0]
         )
@@ -456,30 +463,26 @@ class GSPatternFormation(PatternFormation):
     
     @property
     def diffusionU(self):
-        return self.diffusionRateDc * self.nabla2U
+        return self.diffusionRateDu * self.nabla2U
     
     @property
     def diffusionV(self):
-        return self.diffusionRateDc * self.nabla2V
+        return self.diffusionRateDv * self.nabla2V
     
     @property
     def dotU(self):
         return (
             self.productU 
-            - self.u * self.v ** 2 
             - self.u * self.decayRateKd 
             + self.diffusionU
-            + self.epsilon * (self.c0 - self.u) ** 3
         )
     
     @property
     def dotV(self):
         return (
-            self.productV 
-            + self.u * self.v ** 2 
+            self.productV  
             - self.v * self.decayRateKd 
             + self.diffusionV
-            + self.epsilon * (self.c0 - self.v) ** 3
         )
 
     def update(self):
@@ -487,6 +490,7 @@ class GSPatternFormation(PatternFormation):
         self.temp["dotTheta"] = self.dotTheta
         self.temp["dotU"] = self.dotU
         self.temp["dotV"] = self.dotV
+        self.temp["direction"] = self._direction(self.phaseTheta)
         self.positionX = np.mod(
             self.positionX + self.speedV * self.temp["direction"] * self.dt, 
             self.boundaryLength
@@ -510,15 +514,16 @@ class GSPatternFormation(PatternFormation):
 
     def __str__(self) -> str:
             
-            name =  (
-                f"GSPF_K{self.strengthLambda:.3f}_a{self.alpha:.2f}"
-                f"_bu{self.chemoBetaU:.1f}_bv{self.chemoBetaV:.1f}"
-                f"_pu{self.productRateUK0}_pv{self.productRateVK0}"
-                f"_Kd{self.decayRateKd}_Dc{self.diffusionRateDc}"
-                f"_r{self.randomSeed}"
-            )
-            
-            return name
+        name =  (
+            f"GSPF_K{self.strengthLambda:.3f}_a{self.alpha:.2f}"
+            f"_bu{self.chemoBetaU:.1f}_bv{self.chemoBetaV:.1f}"
+            f"_pu{self.productRateUK0:.2f}_pv{self.productRateVK0:.2f}"
+            f"_Kd{self.decayRateKd:.2f}"
+            f"_Du{self.diffusionRateDu:.2f}_Dv{self.diffusionRateDv:.2f}"
+            f"_r{self.randomSeed}"
+        )
+        
+        return name
 
 
 class StateAnalysis:
