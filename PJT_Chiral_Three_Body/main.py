@@ -210,7 +210,7 @@ class Swarmalators:
             self.store.close()
 
 class Swarmalators2D(Swarmalators):
-    def __init__(self, agentsNum: int, dt: float, K: float, randomSeed: int = 100,
+    def __init__(self,agentsNum: int, dt: float, K: float, randomSeed: int = 100, 
                  tqdm: bool = False, savePath: str = None, shotsnaps: int = 5, overWrite: bool = False) -> None:
         np.random.seed(randomSeed)
         self.positionX = np.random.random((agentsNum, 2)) * 2 - 1
@@ -307,7 +307,7 @@ class Swarmalators2D(Swarmalators):
 ##################################################################################
 
 class ThreeBody(Swarmalators2D):
-    def __init__(self, strengthLambda1: float, strengthLambda2: float, 
+    def __init__(self, frustration:float,strengthLambda1: float, strengthLambda2: float, 
                  distanceD1: float, distanceD2: float, boundaryLength: float = 10, 
                  omegaTheta2Shift: float = 0, agentsNum: int=1000, dt: float=0.01, 
                  tqdm: bool = False, savePath: str = None, shotsnaps: int = 5, 
@@ -333,6 +333,7 @@ class ThreeBody(Swarmalators2D):
                 np.random.normal(loc=3, scale=0.5, size=agentsNum // 2),
                 np.random.normal(loc=-3, scale=0.5, size=agentsNum // 2)
             ])
+        self.frustration = frustration
         self.uniform = uniform
         self.strengthLambda1 = strengthLambda1
         self.strengthLambda2 = strengthLambda2
@@ -390,19 +391,20 @@ class ThreeBody(Swarmalators2D):
                                 self.omegaTheta, 
                                 self.strengthLambda1, self.strengthLambda2, 
                                 self.K1, self.K2, 
-                                self.dt)
-
+                                self.dt, self.frustration)
+                                
     @staticmethod
-    # @nb.njit
+    @nb.njit
     def _pointTheta(phaseTheta: np.ndarray, other1: np.ndarray, other2: np.ndarray, 
                     omegaTheta: np.ndarray, strengthLambda1: float, strengthLambda2: float,
-                    K1: np.ndarray, K2: np.ndarray, dt: float) -> np.ndarray:
+                    K1: np.ndarray, K2: np.ndarray, dt: float, frustration: float) -> np.ndarray:
         k1 = (
             omegaTheta 
-            + strengthLambda1 * np.sum(K1 * np.sin(other1 - phaseTheta), axis=(1, 2))
-            + strengthLambda2 * np.sum(K2 * np.sin(other1 + other2 - 2 * phaseTheta), axis=(1, 2))
+            + strengthLambda1 * np.sum(K1 * np.sin(other1 - phaseTheta + frustration), axis=(1, 2))
+            + strengthLambda2 * np.sum(K2 * np.sin(other1 + other2 - 2 * phaseTheta + 2 * frustration), axis=(1, 2))
         )
         return k1 * dt
+
 
     def append(self):
         if self.store is not None:
@@ -420,6 +422,7 @@ class ThreeBody(Swarmalators2D):
         self.temp = self.pointTheta
         self.phaseTheta += self.temp
         self.phaseTheta = np.mod(self.phaseTheta + np.pi, 2 * np.pi) - np.pi
+        self.frustration = self.frustration
 
     def __str__(self) -> str:
         
@@ -442,4 +445,3 @@ class ThreeBody(Swarmalators2D):
     def close(self):
         if self.store is not None:
             self.store.close()
-

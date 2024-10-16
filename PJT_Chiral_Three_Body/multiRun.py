@@ -25,4 +25,4 @@ if __name__ == "__main__":
     ]
 
     with Pool(4) as p:
-        p.map(run_model, models[:4])
+        p.map(run_model, models)
