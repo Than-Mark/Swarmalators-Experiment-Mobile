@@ -177,21 +177,23 @@ class SpatialGroups(Swarmalators2D):
 
 class SpatialGroupsWithNoise(SpatialGroups):
     def __init__(self, strengthLambda: float, distanceD0: float, 
-                 boundaryLength: float = 10, speedV: float = 3.0, noiseRate: float = 1,
+                 boundaryLength: float = 10, speedV: float = 3.0, 
+                 noiseRateX: float = 1, noiseRatePhase: float = 1,
                  omegaTheta2Shift: float = 0, agentsNum: int=1000, dt: float=0.01, 
                  tqdm: bool = False, savePath: str = None, shotsnaps: int = 5, 
                  distribution: str = "uniform", randomSeed: int = 10, overWrite: bool = False) -> None:
         super().__init__(strengthLambda, distanceD0, boundaryLength, speedV,
                          omegaTheta2Shift, agentsNum, dt, tqdm, savePath, shotsnaps, distribution, randomSeed, overWrite)
-        self.noiseRate = noiseRate
+        self.noiseRateX = noiseRateX
+        self.noiseRatePhase = noiseRatePhase
     
     @property
     def noise(self):
-        return np.random.normal(loc=0, scale=1, size=self.agentsNum) * self.noiseRate
+        return np.random.normal(loc=0, scale=1, size=self.agentsNum) * self.noiseRatePhase
 
     def update(self):
-        self.positionX[:, 0] += self.speedV * np.cos(self.phaseTheta) * self.dt
-        self.positionX[:, 1] += self.speedV * np.sin(self.phaseTheta) * self.dt
+        self.positionX[:, 0] += (self.speedV * np.cos(self.phaseTheta) + np.random.normal(loc=0, scale=1, size=self.agentsNum) * self.noiseRateX) * self.dt
+        self.positionX[:, 1] += (self.speedV * np.sin(self.phaseTheta) + np.random.normal(loc=0, scale=1, size=self.agentsNum) * self.noiseRateX) * self.dt
         self.positionX = np.mod(self.positionX, self.boundaryLength)
         self.temp = self.pointTheta
         self.phaseTheta += self.temp + self.noise * self.dt
@@ -199,7 +201,58 @@ class SpatialGroupsWithNoise(SpatialGroups):
 
     def __str__(self) -> str:
         
-        name =  f"SpatialGroupsWithNoise_{self.distribution}_{self.strengthLambda:.3f}_{self.distanceD0:.2f}_{self.randomSeed}_{self.noiseRate:.2f}"
+        name =  f"SpatialGroupsWithNoise_{self.distribution}_{self.strengthLambda:.3f}_{self.distanceD0:.2f}_{self.randomSeed}_{self.noiseRateX:.2f}_{self.noiseRatePhase:.2f}"
+        
+        return name
+    
+
+class SpatialGroupsWithNoiseAfter(SpatialGroups):
+    def __init__(self, strengthLambda: float, distanceD0: float, 
+                 boundaryLength: float = 10, speedV: float = 3.0, 
+                 noiseRateX: float = 1, noiseRatePhase: float = 1,
+                 omegaTheta2Shift: float = 0, agentsNum: int=1000, dt: float=0.01, 
+                 tqdm: bool = False, savePath: str = None, shotsnaps: int = 5, 
+                 distribution: str = "uniform", randomSeed: int = 10, overWrite: bool = False) -> None:
+        super().__init__(strengthLambda, distanceD0, boundaryLength, speedV,
+                         omegaTheta2Shift, agentsNum, dt, tqdm, savePath, shotsnaps, distribution, randomSeed, overWrite)
+        self.noiseRateX = noiseRateX
+        self.noiseRatePhase = noiseRatePhase
+        oldName = self.get_old_name()
+        targetPath = f"{self.savePath}/{oldName}.h5"
+        totalPositionX = pd.read_hdf(targetPath, key="positionX")
+        totalPhaseTheta = pd.read_hdf(targetPath, key="phaseTheta")
+
+        TNum = totalPositionX.shape[0] // self.agentsNum
+        totalPositionX = totalPositionX.values.reshape(TNum, self.agentsNum, 2)
+        totalPhaseTheta = totalPhaseTheta.values.reshape(TNum, self.agentsNum)
+        
+        self.positionX = totalPositionX[-1]
+        self.phaseTheta = totalPhaseTheta[-1]
+    
+    @property
+    def noise(self):
+        return np.random.normal(loc=0, scale=1, size=self.agentsNum) * self.noiseRatePhase
+
+    def get_old_name(self) -> str:
+        
+        name =  f"CorrectCoupling_{self.distribution}_{self.strengthLambda:.3f}_{self.distanceD0:.2f}_{self.randomSeed}"
+        
+        if self.omegaTheta2Shift != 0:
+            name += f"_shift_{self.omegaTheta2Shift:.2f}"
+
+        return name
+
+    def update(self):
+        self.positionX[:, 0] += (self.speedV * np.cos(self.phaseTheta) + np.random.normal(loc=0, scale=1, size=self.agentsNum) * self.noiseRateX) * self.dt
+        self.positionX[:, 1] += (self.speedV * np.sin(self.phaseTheta) + np.random.normal(loc=0, scale=1, size=self.agentsNum) * self.noiseRateX) * self.dt
+        self.positionX = np.mod(self.positionX, self.boundaryLength)
+        self.temp = self.pointTheta
+        self.phaseTheta += self.temp + self.noise * self.dt
+        self.phaseTheta = np.mod(self.phaseTheta + np.pi, 2 * np.pi) - np.pi
+
+    def __str__(self) -> str:
+        
+        name =  f"SpatialGroupsWithNoise_{self.distribution}_{self.strengthLambda:.3f}_{self.distanceD0:.2f}_{self.randomSeed}_{self.noiseRateX:.2f}_{self.noiseRatePhase:.2f}"
         
         return name
 
