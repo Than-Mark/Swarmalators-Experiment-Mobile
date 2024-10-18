@@ -53,31 +53,37 @@ from swarmalatorlib.template import Swarmalators2D
 
 
 class SpatialGroups(Swarmalators2D):
-    def __init__(self, strengthLambda: float, distanceD0: float, boundaryLength: float = 10, 
+    def __init__(self, strengthLambda: float, distanceD0: float, 
+                 boundaryLength: float = 10, speedV: float = 3.0,
                  omegaTheta2Shift: float = 0, agentsNum: int=1000, dt: float=0.01, 
                  tqdm: bool = False, savePath: str = None, shotsnaps: int = 5, 
-                 uniform: bool = True, randomSeed: int = 10, overWrite: bool = False) -> None:
+                 distribution: str = "uniform", randomSeed: int = 10, overWrite: bool = False) -> None:
         np.random.seed(randomSeed)
         self.positionX = np.random.random((agentsNum, 2)) * boundaryLength
         self.phaseTheta = np.random.random(agentsNum) * 2 * np.pi - np.pi
         self.agentsNum = agentsNum
         self.dt = dt
-        self.speedV = 3
+        self.speedV = speedV
         self.distanceD0 = distanceD0
-        if uniform:
+        if distribution == "uniform":
             self.omegaTheta = np.concatenate([
                 np.random.uniform(1, 3, size=agentsNum // 2),
                 np.random.uniform(-3, -1, size=agentsNum // 2)
             ])
-        else:
+        elif distribution == "normal":
             self.omegaTheta = np.concatenate([
                 np.random.normal(loc=3, scale=0.5, size=agentsNum // 2),
                 np.random.normal(loc=-3, scale=0.5, size=agentsNum // 2)
             ])
+        elif distribution == "lorentzian":
+            self.omegaTheta = np.concatenate([
+                np.random.standard_cauchy(size=agentsNum // 2) + 3,
+                np.random.standard_cauchy(size=agentsNum // 2) - 3
+            ])
         if agentsNum == 2:
             self.omegaTheta = np.array([3, -3])
 
-        self.uniform = uniform
+        self.distribution = distribution
         self.strengthLambda = strengthLambda
         self.tqdm = tqdm
         self.savePath = savePath
@@ -157,11 +163,8 @@ class SpatialGroups(Swarmalators2D):
 
     def __str__(self) -> str:
         
-        if self.uniform:
-            name =  f"CorrectCoupling_uniform_{self.strengthLambda:.3f}_{self.distanceD0:.2f}_{self.randomSeed}"
-        else:
-            name =  f"CorrectCoupling_normal_{self.strengthLambda:.3f}_{self.distanceD0:.2f}_{self.randomSeed}"
-
+        name =  f"CorrectCoupling_{self.distribution}_{self.strengthLambda:.3f}_{self.distanceD0:.2f}_{self.randomSeed}"
+        
         if self.omegaTheta2Shift != 0:
             name += f"_shift_{self.omegaTheta2Shift:.2f}"
 
@@ -172,44 +175,115 @@ class SpatialGroups(Swarmalators2D):
             self.store.close()
 
 
-class NoAdjust(SpatialGroups):
-    def __init__(self, strengthLambda: float, distanceD0: float, boundaryLength: float = 10, 
+class SpatialGroupsWithNoise(SpatialGroups):
+    def __init__(self, strengthLambda: float, distanceD0: float, 
+                 boundaryLength: float = 10, speedV: float = 3.0, noiseRate: float = 1,
                  omegaTheta2Shift: float = 0, agentsNum: int=1000, dt: float=0.01, 
                  tqdm: bool = False, savePath: str = None, shotsnaps: int = 5, 
-                 uniform: bool = True, randomSeed: int = 10, overWrite: bool = False) -> None:
-        super().__init__(strengthLambda, distanceD0, boundaryLength, omegaTheta2Shift, 
-                         agentsNum, dt, tqdm, savePath, shotsnaps, uniform, randomSeed, overWrite)
-        
+                 distribution: str = "uniform", randomSeed: int = 10, overWrite: bool = False) -> None:
+        super().__init__(strengthLambda, distanceD0, boundaryLength, speedV,
+                         omegaTheta2Shift, agentsNum, dt, tqdm, savePath, shotsnaps, distribution, randomSeed, overWrite)
+        self.noiseRate = noiseRate
+    
+    @property
+    def noise(self):
+        return np.random.normal(loc=0, scale=1, size=self.agentsNum) * self.noiseRate
+
     def update(self):
         self.positionX[:, 0] += self.speedV * np.cos(self.phaseTheta) * self.dt
         self.positionX[:, 1] += self.speedV * np.sin(self.phaseTheta) * self.dt
-        # self.positionX = np.mod(self.positionX, self.boundaryLength)
+        self.positionX = np.mod(self.positionX, self.boundaryLength)
         self.temp = self.pointTheta
-        self.phaseTheta += self.temp
+        self.phaseTheta += self.temp + self.noise * self.dt
         self.phaseTheta = np.mod(self.phaseTheta + np.pi, 2 * np.pi) - np.pi
 
-    @property
-    def deltaX(self) -> np.ndarray:
-        return self.positionX - self.positionX[:, np.newaxis]
-    
     def __str__(self) -> str:
-            
-            if self.uniform:
-                name =  f"NoAdjust_uniform_{self.strengthLambda:.3f}_{self.distanceD0:.2f}_{self.randomSeed}"
-            else:
-                name =  f"NoAdjust_normal_{self.strengthLambda:.3f}_{self.distanceD0:.2f}_{self.randomSeed}"
-    
-            return name
+        
+        name =  f"SpatialGroupsWithNoise_{self.distribution}_{self.strengthLambda:.3f}_{self.distanceD0:.2f}_{self.randomSeed}_{self.noiseRate:.2f}"
+        
+        return name
 
+
+class SpatialGroups1Peak(SpatialGroups):
+    def __init__(self, strengthLambda: float, distanceD0: float, 
+                 boundaryLength: float = 10, speedV: float = 3.0,
+                 omegaTheta2Shift: float = 0, agentsNum: int=1000, dt: float=0.01, 
+                 tqdm: bool = False, savePath: str = None, shotsnaps: int = 5, 
+                 distribution: str = "uniform", randomSeed: int = 10, overWrite: bool = False) -> None:
+        super().__init__(strengthLambda, distanceD0, boundaryLength, speedV,
+                         omegaTheta2Shift, agentsNum, dt, tqdm, savePath, shotsnaps, distribution, randomSeed, overWrite)
+        if distribution == "lorentzian":
+            self.omegaTheta = np.random.standard_cauchy(size=agentsNum)
+        elif distribution == "uniform":
+            self.omegaTheta = np.random.uniform(-1.5, 1.5, size=agentsNum)
+        elif distribution == "normal":
+            self.omegaTheta = np.random.normal(loc=0, scale=2, size=agentsNum)
+        else:
+            raise ValueError("distribution must be one of 'lorentzian', 'uniform' or 'normal'")
+
+    def __str__(self) -> str:
+        
+        name =  f"SpatialGroups1Peak_{self.distribution}_{self.strengthLambda:.3f}_{self.distanceD0:.2f}_{self.randomSeed}"
+        
+        return name
+    
+
+class FreqAdjustableSpatialGroups(SpatialGroups):
+    def __init__(self, strengthLambda: float, distanceD0: float, 
+                 boundaryLength: float = 10, speedV: float = 3.0,
+                 omegaMin: float = 1, omegaMax: float = 3, 
+                 agentsNum: int=1000, dt: float=0.01, 
+                 tqdm: bool = False, savePath: str = None, shotsnaps: int = 5, 
+                 randomSeed: int = 10, overWrite: bool = False) -> None:
+        super().__init__(strengthLambda, distanceD0, boundaryLength, speedV,
+                         0, agentsNum, dt, tqdm, savePath, shotsnaps, 
+                         uniform=True, randomSeed=randomSeed, overWrite=overWrite)
+        # self.omegaTheta = np.random.uniform(omegaMin, omegaMax, size=agentsNum)
+        self.omegaTheta = np.concatenate([
+            np.random.uniform(omegaMin, omegaMax, size=agentsNum // 2),
+            np.random.uniform(-omegaMax, -omegaMin, size=agentsNum // 2)
+        ])
+        self.omegaMin = omegaMin
+        self.omegaMax = omegaMax
+
+    def __str__(self) -> str:
+        
+        return f"FreqAdjustableSpatialGroups_uniform_{self.strengthLambda:.3f}_{self.distanceD0:.2f}_{self.randomSeed}_{self.omegaMin:.2f}_{self.omegaMax:.2f}"
+
+
+# class NoAdjust(SpatialGroups):
+#     def __init__(self, strengthLambda: float, distanceD0: float, boundaryLength: float = 10, 
+#                  omegaTheta2Shift: float = 0, agentsNum: int=1000, dt: float=0.01, 
+#                  tqdm: bool = False, savePath: str = None, shotsnaps: int = 5, 
+#                  uniform: bool = True, randomSeed: int = 10, overWrite: bool = False) -> None:
+#         super().__init__(strengthLambda, distanceD0, boundaryLength, omegaTheta2Shift, 
+#                          agentsNum, dt, tqdm, savePath, shotsnaps, uniform, randomSeed, overWrite)
+        
+#     def update(self):
+#         self.positionX[:, 0] += self.speedV * np.cos(self.phaseTheta) * self.dt
+#         self.positionX[:, 1] += self.speedV * np.sin(self.phaseTheta) * self.dt
+#         # self.positionX = np.mod(self.positionX, self.boundaryLength)
+#         self.temp = self.pointTheta
+#         self.phaseTheta += self.temp
+#         self.phaseTheta = np.mod(self.phaseTheta + np.pi, 2 * np.pi) - np.pi
+
+#     @property
+#     def deltaX(self) -> np.ndarray:
+#         return self.positionX - self.positionX[:, np.newaxis]
+    
+#     def __str__(self) -> str:
+            
+#         return f"NoAdjust_{self.distribution}_{self.strengthLambda:.3f}_{self.distanceD0:.2f}_{self.randomSeed}"
+            
 
 class CorrectCouplingAfter(SpatialGroups):
     def __init__(self, strengthLambda: float, distanceD0: float, 
                  enhancedLambdas: np.ndarray = None, enhancedDistanceD0: np.ndarray = None,
                  boundaryLength: float = 10, omegaTheta2Shift: float = 0, agentsNum: int=1000, 
                  dt: float=0.01, tqdm: bool = False, savePath: str = None, shotsnaps: int = 5, 
-                 uniform: bool = True, randomSeed: int = 10, overWrite: bool = False) -> None:
+                 distribution: str = "uniform", randomSeed: int = 10, overWrite: bool = False) -> None:
         super().__init__(strengthLambda, distanceD0, boundaryLength, omegaTheta2Shift, 
-                         agentsNum, dt, tqdm, savePath, shotsnaps, uniform, randomSeed, overWrite)
+                         agentsNum, dt, tqdm, savePath, shotsnaps, distribution, randomSeed, overWrite)
 
         if (enhancedLambdas is not None) & (enhancedDistanceD0 is not None):
             raise ValueError("Adiabatic tuning can only be one-dimensional")
@@ -238,11 +312,8 @@ class CorrectCouplingAfter(SpatialGroups):
 
     def get_old_name(self) -> str:
         
-        if self.uniform:
-            name =  f"CorrectCoupling_uniform_{self.strengthLambda:.3f}_{self.distanceD0:.2f}_{self.randomSeed}"
-        else:
-            name =  f"CorrectCoupling_normal_{self.strengthLambda:.3f}_{self.distanceD0:.2f}_{self.randomSeed}"
-
+        name =  f"CorrectCoupling_{self.distribution}_{self.strengthLambda:.3f}_{self.distanceD0:.2f}_{self.randomSeed}"
+        
         if self.omegaTheta2Shift != 0:
             name += f"_shift_{self.omegaTheta2Shift:.2f}"
 
@@ -376,7 +447,9 @@ class SingleDistribution(SpatialGroups):
         
         
         name =  f"SingleDistribution_{self.distributType}_{self.strengthLambda:.3f}_{self.distanceD0:.2f}_{self.randomSeed}_{self.omegaShift:.2f}"
-        
+        if self.agentsNum != 500:
+            name += f"_{self.agentsNum}"
+
         return name
 
     def plot(self):
@@ -606,6 +679,30 @@ class StateAnalysis:
         ax.set_xlabel(r"$x$", fontsize=16)
         ax.set_ylabel(r"$y$", fontsize=16, rotation=0)
     
+    def center_radius_op(self, classOsci: np.ndarray):
+        centers = self.centers
+        return self.adj_distance(centers[classOsci], self.totalPositionX[:, classOsci]).mean(axis=1)
+    
+    def tv_center_radius_op(self, step: int = 10):
+        centerRadios = []
+
+        if self.showTqdm:
+            iterObject = tqdm(range(1, self.totalPhaseTheta.shape[0]))
+        else:
+            iterObject = range(1, self.totalPhaseTheta.shape[0])
+
+        for i in iterObject:
+            if i % step != 0:
+                continue
+            self.lookIndex = i
+            centers = self.centersNoMod
+            modCenters = np.mod(centers, self.model.boundaryLength)
+            distance = self.adj_distance(modCenters, self.totalPositionX[i])
+            d = np.mean(distance)
+            centerRadios = centerRadios + [d] * step
+
+        return np.array(centerRadios)
+    
     def tv_center_position(self, step: int = 30):
         color = ["red"] * 500 + ["blue"] * 500
 
@@ -636,6 +733,37 @@ class StateAnalysis:
         colors = np.concatenate(colors, axis=0)
 
         return np.array([t, positionX, positionY]).T, colors
+
+    def tv_center_radius(self, step: int = 30):
+        
+        color = ["tomato"] * 500 + ["dodgerblue"] * 500
+
+        t = []
+        centerRadios = []
+        colors = []
+
+        if self.showTqdm:
+            iterObject = tqdm(range(1, self.totalPhaseTheta.shape[0]))
+        else:
+            iterObject = range(1, self.totalPhaseTheta.shape[0])
+
+        for i in iterObject:
+            if i % step != 0:
+                continue
+            self.lookIndex = i
+
+            centers = self.centersNoMod
+            t.append(np.ones(self.model.agentsNum) * i)
+            centerRadios.append(
+                np.sqrt(np.sum((centers - self.totalPositionX[i])**2, axis=-1))
+            )  # self.adj_distance(self.totalPositionX[i], centers)
+            colors.append(color)
+
+        t = np.concatenate(t, axis=0)
+        centerRadios = np.concatenate(centerRadios, axis=0)
+        colors = np.concatenate(colors, axis=0)
+
+        return np.array([t, centerRadios]).T, colors
     
     def phase_agg_op(self):
         theta = self.totalPhaseTheta[self.lookIndex]
