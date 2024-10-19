@@ -1,11 +1,16 @@
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
-from tqdm.notebook import tqdm
 import pandas as pd
 import numba as nb
 import numpy as np
 import warnings
+import sys
 import os
+
+if "ipykernel_launcher.py" in sys.argv[0]:
+    from tqdm.notebook import tqdm
+else:
+    from tqdm import tqdm
 
 new_cmap = mcolors.LinearSegmentedColormap.from_list(
     "new", plt.cm.jet(np.linspace(0, 1, 256)) * 0.85, N=256
