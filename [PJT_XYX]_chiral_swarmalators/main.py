@@ -290,7 +290,7 @@ class FreqAdjustableSpatialGroups(SpatialGroups):
                  randomSeed: int = 10, overWrite: bool = False) -> None:
         super().__init__(strengthLambda, distanceD0, boundaryLength, speedV,
                          0, agentsNum, dt, tqdm, savePath, shotsnaps, 
-                         uniform=True, randomSeed=randomSeed, overWrite=overWrite)
+                         distribution="uniform", randomSeed=randomSeed, overWrite=overWrite)
         # self.omegaTheta = np.random.uniform(omegaMin, omegaMax, size=agentsNum)
         self.omegaTheta = np.concatenate([
             np.random.uniform(omegaMin, omegaMax, size=agentsNum // 2),

@@ -13,7 +13,7 @@ import shutil
 
 def run_model(model):
         # enhancedLambdas = np.linspace(0.009, 0.1, 50000)
-        model.run(60000)
+        model.run(30000)
         # model.run(np.ones(60000) * model.strengthLambda)
 
 if __name__ == "__main__":
@@ -49,10 +49,10 @@ if __name__ == "__main__":
     SAVE_PATH = r"E:\MS_ExperimentData\general"
 
     models = [
-        FreqAdjustableSpatialGroups(strengthLambda=0.02, distanceD0=0.3, omegaMin=0.5, omegaMax=omegaMax, tqdm=True, savePath=SAVE_PATH, randomSeed=10, overWrite=True) 
+        FreqAdjustableSpatialGroups(strengthLambda=0.4, distanceD0=0.3, omegaMin=0.5, omegaMax=omegaMax, dt=0.02, tqdm=True, savePath=SAVE_PATH, randomSeed=10, overWrite=True) 
         for omegaMax in [2, 2.5, 3.5, 4]
     ] + [
-        FreqAdjustableSpatialGroups(strengthLambda=0.02, distanceD0=0.3, omegaMin=1.5, omegaMax=omegaMax, tqdm=True, savePath=SAVE_PATH, randomSeed=10, overWrite=True) 
+        FreqAdjustableSpatialGroups(strengthLambda=0.4, distanceD0=0.3, omegaMin=1.5, omegaMax=omegaMax, dt=0.02, tqdm=True, savePath=SAVE_PATH, randomSeed=10, overWrite=True) 
         for omegaMax in [2, 2.5, 3.5, 4]
     ]
 
