@@ -26,23 +26,7 @@ new_cmap = mcolors.LinearSegmentedColormap.from_list(
 def colors_idx(phaseTheta):
     return np.floor(256 - phaseTheta / (2 * np.pi) * 256).astype(np.int32)
 
-# import seaborn as sns
 
-# sns.set(font_scale=1.1, rc={
-#     'figure.figsize': (6, 5),
-#     'axes.facecolor': 'white',
-#     'figure.facecolor': 'white',
-#     'grid.color': '#dddddd',
-#     'grid.linewidth': 0.5,
-#     "lines.linewidth": 1.5,
-#     'text.color': '#000000',
-#     'figure.titleweight': "bold",
-#     'xtick.color': '#000000',
-#     'ytick.color': '#000000'
-# })
-
-# plt.rcParams['mathtext.fontset'] = 'stix'
-# plt.rcParams['font.family'] = 'STIXGeneral'
 if os.path.exists("/opt/conda/bin/ffmpeg"):
     plt.rcParams['animation.ffmpeg_path'] = "/opt/conda/bin/ffmpeg"
 else:
@@ -55,10 +39,11 @@ from swarmalatorlib.template import Swarmalators2D
 class ChiralInducedPhaseLag(Swarmalators2D):
     def __init__(self, strengthLambda: float, distanceD0: float, 
                  boundaryLength: float = 10, speedV: float = 3.0,
-                 phaseLag: float = 0, scale: float = 2,
+                 phaseLag: float = 0, 
+                 omegaMin: float = 0.1, omegaMax: float = 3.0,
                  agentsNum: int=1000, dt: float=0.02, 
                  tqdm: bool = False, savePath: str = None, shotsnaps: int = 5, 
-                 distribution: str = "uniform", randomSeed: int = 10, overWrite: bool = False) -> None:
+                 randomSeed: int = 10, overWrite: bool = False) -> None:
         np.random.seed(randomSeed)
         self.positionX = np.random.random((agentsNum, 2)) * boundaryLength
         self.phaseTheta = np.random.random(agentsNum) * 2 * np.pi - np.pi
@@ -66,16 +51,13 @@ class ChiralInducedPhaseLag(Swarmalators2D):
         self.dt = dt
         self.speedV = speedV
         self.distanceD0 = distanceD0
-        if distribution == "lorentzian":
-            self.omegaTheta = np.random.standard_cauchy(size=agentsNum) * scale
-        elif distribution == "uniform":
-            self.omegaTheta = np.random.uniform(-scale, scale, size=agentsNum)
-        elif distribution == "normal":
-            self.omegaTheta = np.random.normal(loc=0, scale=scale, size=agentsNum)
-        else:
-            raise ValueError("distribution must be one of 'lorentzian', 'uniform' or 'normal'")
+        self.omegaMin = omegaMin
+        self.omegaMax = omegaMax
+        posOmega = np.random.uniform(omegaMin, omegaMax, agentsNum // 2)
+        self.omegaTheta = np.concatenate([
+            posOmega, -posOmega      
+        ])
 
-        self.distribution = distribution
         self.strengthLambda = strengthLambda
         self.tqdm = tqdm
         self.savePath = savePath
@@ -88,7 +70,6 @@ class ChiralInducedPhaseLag(Swarmalators2D):
         self.overWrite = overWrite
 
         self.phaseLag = phaseLag
-        self.scale = scale
 
         self.omegaTheta = np.sort(self.omegaTheta)
         isPos = (self.omegaTheta > 0).astype(np.int32)
@@ -165,9 +146,9 @@ class ChiralInducedPhaseLag(Swarmalators2D):
     def __str__(self) -> str:
         
         return (
-            f"ChiralInducedPhaseLag_{self.distribution}"
+            f"ChiralInducedPhaseLag_"
             f"_{self.strengthLambda:.3f}_{self.distanceD0:.2f}"
-            f"_{self.phaseLag:.2f}_{self.scale:.2f}"
+            f"_{self.phaseLag:.2f}_{self.omegaMin:.2f}_{self.omegaMax:.2f}"
             f"_{self.randomSeed}"
         )
 
