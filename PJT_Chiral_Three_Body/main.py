@@ -307,9 +307,9 @@ class Swarmalators2D(Swarmalators):
 ##################################################################################
 
 class ThreeBody(Swarmalators2D):
-    def __init__(self, frustration:float,strengthLambda1: float, strengthLambda2: float, 
+    def __init__(self, frustration:float, strengthLambda1: float, strengthLambda2: float, 
                  distanceD1: float, distanceD2: float, boundaryLength: float = 10, 
-                 omegaTheta2Shift: float = 0, agentsNum: int=1000, dt: float=0.01, 
+                 omegaTheta2Shift: float = 0, agentsNum: int = 1000, dt: float = 0.01, 
                  tqdm: bool = False, savePath: str = None, shotsnaps: int = 5, 
                  uniform: bool = True, randomSeed: int = 10, overWrite: bool = False) -> None:
         """ 
@@ -363,8 +363,8 @@ class ThreeBody(Swarmalators2D):
     def K2(self):
         return (
             self.tempForK[:, :, np.newaxis] * 
-            self.tempForK[:, np.newaxis, :] * 
-            self.tempForK[np.newaxis, :, :]
+            self.tempForK[:, np.newaxis, :] 
+            # * self.tempForK[np.newaxis, :, :]
         )
 
     @property
@@ -394,7 +394,7 @@ class ThreeBody(Swarmalators2D):
                                 self.dt, self.frustration)
                                 
     @staticmethod
-    @nb.njit
+    # @nb.njit
     def _pointTheta(phaseTheta: np.ndarray, other1: np.ndarray, other2: np.ndarray, 
                     omegaTheta: np.ndarray, strengthLambda1: float, strengthLambda2: float,
                     K1: np.ndarray, K2: np.ndarray, dt: float, frustration: float) -> np.ndarray:
