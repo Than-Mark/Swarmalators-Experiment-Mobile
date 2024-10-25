@@ -40,7 +40,7 @@ class ChiralInducedPhaseLag(Swarmalators2D):
     def __init__(self, strengthLambda: float, distanceD0: float, 
                  boundaryLength: float = 10, speedV: float = 3.0,
                  phaseLag: float = 0, 
-                 omegaMin: float = 0.1, omegaMax: float = 3.0,
+                 omegaMin: float = 0.1, deltaOmega: float = 2.0,
                  agentsNum: int=1000, dt: float=0.02, 
                  tqdm: bool = False, savePath: str = None, shotsnaps: int = 5, 
                  randomSeed: int = 10, overWrite: bool = False) -> None:
@@ -52,8 +52,8 @@ class ChiralInducedPhaseLag(Swarmalators2D):
         self.speedV = speedV
         self.distanceD0 = distanceD0
         self.omegaMin = omegaMin
-        self.omegaMax = omegaMax
-        posOmega = np.random.uniform(omegaMin, omegaMax, agentsNum // 2)
+        self.deltaOmega = deltaOmega
+        posOmega = np.random.uniform(omegaMin, omegaMin + deltaOmega, agentsNum // 2)
         self.omegaTheta = np.concatenate([
             posOmega, -posOmega      
         ])
@@ -148,7 +148,7 @@ class ChiralInducedPhaseLag(Swarmalators2D):
         return (
             f"ChiralInducedPhaseLag_"
             f"_{self.strengthLambda:.3f}_{self.distanceD0:.2f}"
-            f"_{self.phaseLag:.2f}_{self.omegaMin:.2f}_{self.omegaMax:.2f}"
+            f"_{self.phaseLag:.2f}_{self.omegaMin:.2f}_{self.deltaOmega:.1f}"
             f"_{self.randomSeed}"
         )
 
@@ -341,8 +341,8 @@ class StateAnalysis:
             positionX[oscis, 0], positionX[oscis, 1],
             np.cos(phaseTheta[oscis]), np.sin(phaseTheta[oscis]), **kwargs
         )
-        ax.set_xlim(0, 10)
-        ax.set_ylim(0, 10)    
+        ax.set_xlim(0, self.model.boundaryLength)
+        ax.set_ylim(0, self.model.boundaryLength)    
 
     def plot_centers(self, ax: plt.Axes = None, index: int = -1):
         positionX, phaseTheta, pointTheta = self.get_state(index)
