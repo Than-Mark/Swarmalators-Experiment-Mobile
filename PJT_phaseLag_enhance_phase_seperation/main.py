@@ -157,6 +157,32 @@ class ChiralInducedPhaseLag(Swarmalators2D):
             self.store.close()
 
 
+class PurePhaseModel(ChiralInducedPhaseLag):
+    def __init__(self, strengthLambda: float, 
+                 boundaryLength: float = 10, speedV: float = 3.0,
+                 omegaMin: float = 0.1, deltaOmega: float = 2.0,
+                 agentsNum: int=1000, dt: float=0.02, 
+                 tqdm: bool = False, savePath: str = None, shotsnaps: int = 5, 
+                 randomSeed: int = 10, overWrite: bool = False) -> None:
+        super().__init__(strengthLambda, 10, boundaryLength, speedV, 0, omegaMin, deltaOmega, 
+                         agentsNum, dt, tqdm, savePath, shotsnaps, randomSeed, overWrite)
+        self.phaseLagMatrix = np.zeros((agentsNum, agentsNum))
+
+    def update(self):
+        self.temp = self.pointTheta * self.dt
+        self.phaseTheta += self.temp
+        self.phaseTheta = np.mod(self.phaseTheta + np.pi, 2 * np.pi) - np.pi
+
+    def __str__(self) -> str:
+        
+        return (
+            f"PurePhaseModel_"
+            f"_{self.strengthLambda:.3f}"
+            f"_{self.omegaMin:.2f}_{self.deltaOmega:.1f}"
+            f"_{self.randomSeed}"
+        )
+
+
 class StateAnalysis:
     def __init__(self, model: ChiralInducedPhaseLag, classDistance: float = 2, lookIndex: int = -1, showTqdm: bool = False):
         self.model = model
