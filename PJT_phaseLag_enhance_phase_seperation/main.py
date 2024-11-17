@@ -158,15 +158,35 @@ class ChiralInducedPhaseLag(Swarmalators2D):
 
 
 class PurePhaseModel(ChiralInducedPhaseLag):
-    def __init__(self, strengthLambda: float, 
-                 boundaryLength: float = 10, speedV: float = 3.0,
+    def __init__(self, strengthLambda: float, phaseLag: float,
+                 speedV: float = 3.0,
                  omegaMin: float = 0.1, deltaOmega: float = 2.0,
                  agentsNum: int=1000, dt: float=0.02, 
                  tqdm: bool = False, savePath: str = None, shotsnaps: int = 5, 
                  randomSeed: int = 10, overWrite: bool = False) -> None:
-        super().__init__(strengthLambda, 10, boundaryLength, speedV, 0, omegaMin, deltaOmega, 
+        super().__init__(strengthLambda, 10, 1, speedV, phaseLag, omegaMin, deltaOmega, 
                          agentsNum, dt, tqdm, savePath, shotsnaps, randomSeed, overWrite)
-        self.phaseLagMatrix = np.zeros((agentsNum, agentsNum))
+
+    @property
+    def pointTheta(self):
+        return self._pointTheta(self.phaseTheta, self.omegaTheta, self.strengthLambda, 
+                                self.phaseLagMatrix)
+
+    @staticmethod
+    @nb.njit
+    def _pointTheta(phaseTheta: np.ndarray, omegaTheta: np.ndarray, strengthLambda: float, 
+                    phaseLagMatrix: np.ndarray) -> np.ndarray:
+        adjMatrixTheta = np.repeat(phaseTheta, phaseTheta.shape[0]).reshape(phaseTheta.shape[0], phaseTheta.shape[0])
+        return omegaTheta + strengthLambda * np.sum(
+            np.sin(adjMatrixTheta - phaseTheta + phaseLagMatrix) - np.sin(phaseLagMatrix)
+        , axis=0)
+
+    def append(self):
+        if self.store is not None:
+            if self.counts % self.shotsnaps != 0:
+                return
+            self.store.append(key="phaseTheta", value=pd.DataFrame(self.phaseTheta))
+            self.store.append(key="pointTheta", value=pd.DataFrame(self.temp))
 
     def update(self):
         self.temp = self.pointTheta * self.dt
