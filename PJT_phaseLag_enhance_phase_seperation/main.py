@@ -157,6 +157,25 @@ class ChiralInducedPhaseLag(Swarmalators2D):
             self.store.close()
 
 
+class MeanFieldChiralInducedPhaseLag(ChiralInducedPhaseLag):
+    @staticmethod
+    @nb.njit
+    def _pointTheta(phaseTheta: np.ndarray, omegaTheta: np.ndarray, strengthLambda: float, 
+                    K: np.ndarray, phaseLagMatrix: np.ndarray) -> np.ndarray:
+        adjMatrixTheta = np.repeat(phaseTheta, phaseTheta.shape[0]).reshape(phaseTheta.shape[0], phaseTheta.shape[0])
+        return omegaTheta + strengthLambda * np.sum(K * (
+            np.sin(adjMatrixTheta - phaseTheta + phaseLagMatrix) - np.sin(phaseLagMatrix)
+        ), axis=0) / np.sum(K, axis=0)
+
+    def __str__(self) -> str:
+        return (
+            f"MeanFieldChiralInducedPhaseLag_"
+            f"_{self.strengthLambda:.3f}_{self.distanceD0:.2f}"
+            f"_{self.phaseLag:.2f}_{self.omegaMin:.2f}_{self.deltaOmega:.1f}"
+            f"_{self.randomSeed}"
+        )
+
+
 class PurePhaseModel(ChiralInducedPhaseLag):
     def __init__(self, strengthLambda: float, phaseLag: float,
                  speedV: float = 3.0,
@@ -179,7 +198,7 @@ class PurePhaseModel(ChiralInducedPhaseLag):
         adjMatrixTheta = np.repeat(phaseTheta, phaseTheta.shape[0]).reshape(phaseTheta.shape[0], phaseTheta.shape[0])
         return omegaTheta + strengthLambda * np.sum(
             np.sin(adjMatrixTheta - phaseTheta + phaseLagMatrix) - np.sin(phaseLagMatrix)
-        , axis=0)
+        , axis=0) / phaseTheta.shape[0]
 
     def append(self):
         if self.store is not None:
@@ -197,7 +216,7 @@ class PurePhaseModel(ChiralInducedPhaseLag):
         
         return (
             f"PurePhaseModel_"
-            f"_{self.strengthLambda:.3f}"
+            f"_{self.strengthLambda:.3f}_{self.phaseLag:.2f}"
             f"_{self.omegaMin:.2f}_{self.deltaOmega:.1f}"
             f"_{self.randomSeed}"
         )
