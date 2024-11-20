@@ -83,12 +83,12 @@ class PatternFormation(Swarmalators2D):
         self.speedV = 3
         self.alpha = alpha
         if distribution == "uniform":
-            self.omegaTheta = np.concatenate([
+            self.freqOmega = np.concatenate([
                 np.random.uniform(1, 3, size=agentsNum // 2),
                 np.random.uniform(-3, -1, size=agentsNum // 2)
             ])
         elif distribution == "normal":
-            self.omegaTheta = np.concatenate([
+            self.freqOmega = np.concatenate([
                 np.random.normal(loc=3, scale=0.5, size=agentsNum // 2),
                 np.random.normal(loc=-3, scale=0.5, size=agentsNum // 2)
             ])
@@ -234,19 +234,19 @@ class PatternFormation(Swarmalators2D):
 
     @property
     def dotTheta(self):
-        return self._dotTheta(self.phaseTheta, self.omegaTheta, self.chemotactic, 
+        return self._dotTheta(self.phaseTheta, self.freqOmega, self.chemotactic, 
                               self.strengthLambda, self.A)
 
     @staticmethod
     @nb.njit
-    def _dotTheta(phaseTheta: np.ndarray, omegaTheta: np.ndarray, 
-                    chemotactic: np.ndarray, strengthLambda: float, 
-                    A: np.ndarray):
+    def _dotTheta(phaseTheta: np.ndarray, freqOmega: np.ndarray, 
+                  chemotactic: np.ndarray, strengthLambda: float, 
+                  A: np.ndarray):
         adjMatrixTheta = (
             np.repeat(phaseTheta, phaseTheta.shape[0])
             .reshape(phaseTheta.shape[0], phaseTheta.shape[0])
         )
-        return omegaTheta + chemotactic + strengthLambda * np.sum(A * np.sin(
+        return freqOmega + chemotactic + strengthLambda * np.sum(A * np.sin(
             adjMatrixTheta - phaseTheta
         ), axis=0)
         
@@ -308,11 +308,12 @@ class GSPatternFormation(PatternFormation):
                  diffusionRateDu: float = 1, diffusionRateDv: float = 1, 
                  cellNumInLine: int = 50, 
                  typeA: str = "distanceWgt", agentsNum: int=1000, dt: float=0.01, 
+                 distribution: str = "uniform", omegaMean: float = 2, omegaStd: float = 1,
                  tqdm: bool = False, savePath: str = None, shotsnaps: int = 10, 
-                 distribution: str = "uniform", randomSeed: int = 10, overWrite: bool = False) -> None:
+                 randomSeed: int = 10, overWrite: bool = False) -> None:
 
-        assert distribution in ["uniform"]
-        assert typeA in ["distanceWgt"]
+        assert distribution in ["uniform", "normal"]
+        assert typeA in ["distanceWgt", "heaviside"]
 
         self.halfAgentsNum = agentsNum // 2
 
@@ -332,15 +333,12 @@ class GSPatternFormation(PatternFormation):
         self.speedV = 3
         self.alpha = alpha
         if distribution == "uniform":
-            self.omegaTheta = np.concatenate([
-                np.random.uniform(1, 3, size=self.halfAgentsNum),
-                np.random.uniform(-3, -1, size=self.halfAgentsNum)
-            ])
+            freqOmega = np.random.uniform(omegaMean - omegaStd, omegaMean + omegaStd, size=self.halfAgentsNum)
         elif distribution == "normal":
-            self.omegaTheta = np.concatenate([
-                np.random.normal(loc=3, scale=0.5, size=self.halfAgentsNum),
-                np.random.normal(loc=-3, scale=0.5, size=self.halfAgentsNum)
-            ])
+            freqOmega = np.random.normal(loc=omegaMean, scale=omegaStd, size=self.halfAgentsNum)
+        self.freqOmega = np.concatenate([freqOmega, -freqOmega])
+        self.omegaMean = omegaMean
+        self.omegaStd = omegaStd
 
         self.typeA = typeA
         self.distribution = distribution
@@ -519,8 +517,9 @@ class GSPatternFormation(PatternFormation):
             f"_bu{self.chemoBetaU:.1f}_bv{self.chemoBetaV:.1f}"
             f"_pu{self.productRateUK0:.2f}_pv{self.productRateVK0:.2f}"
             f"_Kd{self.decayRateKd:.2f}"
-            f"_Du{self.diffusionRateDu:.2f}_Dv{self.diffusionRateDv:.2f}"
+            f"_Du{self.diffusionRateDu:.3f}_Dv{self.diffusionRateDv:.3f}"
             f"_r{self.randomSeed}"
+            f"_oD({self.distribution},{self.omegaMean:.1f},{self.omegaStd:.1f})"
         )
         
         return name
