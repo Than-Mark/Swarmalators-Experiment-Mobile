@@ -239,6 +239,7 @@ class Swarmalators2D(Swarmalators):
         self.counts = 0
         self.temp = {}
         self.overWrite = overWrite 
+        self.update_temp()
 
     def plot(self, ax: plt.Axes = None) -> None:
         if ax is None:
