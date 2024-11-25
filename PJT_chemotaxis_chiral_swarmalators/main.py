@@ -303,7 +303,7 @@ class PatternFormation(Swarmalators2D):
 class GSPatternFormation(PatternFormation):
     def __init__(self, strengthLambda: float, alpha: float, boundaryLength: float = 10, 
                  productRateUK0: float = 1, productRateVK0: float = 1,
-                 decayRateKd: float = 1, 
+                 decayRateKd: float = 1, speedV: float = 3,
                  chemoBetaU: float = 1, chemoBetaV: float = 1, 
                  diffusionRateDu: float = 1, diffusionRateDv: float = 1, 
                  cellNumInLine: int = 50, 
@@ -330,7 +330,7 @@ class GSPatternFormation(PatternFormation):
         self.diffusionRateDu = diffusionRateDu
         self.diffusionRateDv = diffusionRateDv
         self.dt = dt
-        self.speedV = 3
+        self.speedV = speedV
         self.alpha = alpha
         if distribution == "uniform":
             freqOmega = np.random.uniform(omegaMean - omegaStd, omegaMean + omegaStd, size=self.halfAgentsNum)
@@ -516,7 +516,7 @@ class GSPatternFormation(PatternFormation):
             f"GSPF_K{self.strengthLambda:.3f}_a{self.alpha:.2f}"
             f"_bu{self.chemoBetaU:.1f}_bv{self.chemoBetaV:.1f}"
             f"_pu{self.productRateUK0:.2f}_pv{self.productRateVK0:.2f}"
-            f"_Kd{self.decayRateKd:.2f}"
+            f"_Kd{self.decayRateKd:.2f}_sV{self.speedV:.1f}"
             f"_Du{self.diffusionRateDu:.3f}_Dv{self.diffusionRateDv:.3f}"
             f"_r{self.randomSeed}"
             f"_oD({self.distribution},{self.omegaMean:.1f},{self.omegaStd:.1f})"

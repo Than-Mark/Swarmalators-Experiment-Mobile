@@ -40,10 +40,12 @@ class ChiralInducedPhaseLag(Swarmalators2D):
     def __init__(self, strengthLambda: float, distanceD0: float, 
                  boundaryLength: float = 10, speedV: float = 3.0,
                  phaseLag: float = 0, 
+                 distribution: str = "uniform",
                  omegaMin: float = 0.1, deltaOmega: float = 2.0,
                  agentsNum: int=1000, dt: float=0.02, 
                  tqdm: bool = False, savePath: str = None, shotsnaps: int = 5, 
                  randomSeed: int = 10, overWrite: bool = False) -> None:
+        assert distribution in ["uniform", "cauchy"]
         np.random.seed(randomSeed)
         self.positionX = np.random.random((agentsNum, 2)) * boundaryLength
         self.phaseTheta = np.random.random(agentsNum) * 2 * np.pi - np.pi
@@ -53,10 +55,14 @@ class ChiralInducedPhaseLag(Swarmalators2D):
         self.distanceD0 = distanceD0
         self.omegaMin = omegaMin
         self.deltaOmega = deltaOmega
-        posOmega = np.random.uniform(omegaMin, omegaMin + deltaOmega, agentsNum // 2)
+        if distribution == "uniform":
+            posOmega = np.random.uniform(omegaMin, omegaMin + deltaOmega, agentsNum // 2)
+        else:
+            posOmega = np.random.standard_cauchy(agentsNum // 2)
         self.omegaTheta = np.concatenate([
-            posOmega, -posOmega      
+            posOmega, -posOmega
         ])
+        self.distribution = distribution
 
         self.strengthLambda = strengthLambda
         self.tqdm = tqdm
@@ -90,8 +96,8 @@ class ChiralInducedPhaseLag(Swarmalators2D):
             self.positionX[self.agentsNum // 2:, 0], self.positionX[self.agentsNum // 2:, 1],
             np.cos(self.phaseTheta[self.agentsNum // 2:]), np.sin(self.phaseTheta[self.agentsNum // 2:]), color="#414CC7"
         )
-        plt.xlim(0, 10)
-        plt.ylim(0, 10)
+        plt.xlim(0, self.boundaryLength)
+        plt.ylim(0, self.boundaryLength)
 
     @property
     def K(self):
@@ -144,12 +150,13 @@ class ChiralInducedPhaseLag(Swarmalators2D):
         self.phaseTheta = np.mod(self.phaseTheta + np.pi, 2 * np.pi) - np.pi
 
     def __str__(self) -> str:
-        
         return (
-            f"ChiralInducedPhaseLag_"
-            f"_{self.strengthLambda:.3f}_{self.distanceD0:.2f}"
-            f"_{self.phaseLag:.2f}_{self.omegaMin:.2f}_{self.deltaOmega:.1f}"
-            f"_{self.randomSeed}"
+            f"ChiralInducedPhaseLag"
+            f"_di{self.distribution}"
+            f"_l{self.strengthLambda:.3f}_d{self.distanceD0:.2f}"
+            f"_a{self.phaseLag:.2f}"
+            f"_oM{self.omegaMin:.2f}_dO{self.deltaOmega:.1f}" if self.distribution == "uniform" else ""
+            f"_bL{self.boundaryLength}_rS{self.randomSeed}"
         )
 
     def close(self):
@@ -158,6 +165,23 @@ class ChiralInducedPhaseLag(Swarmalators2D):
 
 
 class MeanFieldChiralInducedPhaseLag(ChiralInducedPhaseLag):
+    def __init__(self, strengthLambda: float, distanceD0: float, 
+                 boundaryLength: float = 10, speedV: float = 3.0,
+                 phaseLag: float = 0, 
+                 distribution: str = "uniform", initPhaseTheta: np.ndarray = None,
+                 omegaMin: float = 0.1, deltaOmega: float = 2.0,
+                 agentsNum: int=1000, dt: float=0.02, 
+                 tqdm: bool = False, savePath: str = None, shotsnaps: int = 5, 
+                 randomSeed: int = 10, overWrite: bool = False) -> None:
+        super().__init__(strengthLambda, distanceD0, boundaryLength, speedV, phaseLag, 
+                         distribution, omegaMin, deltaOmega, agentsNum, dt, tqdm, 
+                         savePath, shotsnaps, randomSeed, overWrite)
+        if initPhaseTheta is not None:
+            self.phaseTheta = initPhaseTheta
+            self.useInitPhaseTheta = True
+        else:
+            self.useInitPhaseTheta = False
+
     @staticmethod
     @nb.njit
     def _pointTheta(phaseTheta: np.ndarray, omegaTheta: np.ndarray, strengthLambda: float, 
@@ -168,23 +192,34 @@ class MeanFieldChiralInducedPhaseLag(ChiralInducedPhaseLag):
         ), axis=0) / np.sum(K, axis=0)
 
     def __str__(self) -> str:
+        if self.distribution == "uniform":
+            distributionInfo = f"di{self.distribution}_oM{self.omegaMin:.2f}_dO{self.deltaOmega:.1f}"
+        else:
+            distributionInfo = f"di{self.distribution}"
+
         return (
-            f"MeanFieldChiralInducedPhaseLag_"
-            f"_{self.strengthLambda:.3f}_{self.distanceD0:.2f}"
-            f"_{self.phaseLag:.2f}_{self.omegaMin:.2f}_{self.deltaOmega:.1f}"
-            f"_{self.randomSeed}"
-        )
+            f"MeanFieldChiralInducedPhaseLag"
+            f"_{distributionInfo}"
+            f"_l{self.strengthLambda:.3f}_d{self.distanceD0:.2f}"
+            f"_a{self.phaseLag:.2f}"
+            f"_bL{self.boundaryLength}_rS{self.randomSeed}"
+        ) + ("_init" if self.useInitPhaseTheta else "")
 
 
 class PurePhaseModel(ChiralInducedPhaseLag):
     def __init__(self, strengthLambda: float, phaseLag: float,
-                 speedV: float = 3.0,
+                 distribution: str = "uniform", initPhaseTheta: np.ndarray = None,
                  omegaMin: float = 0.1, deltaOmega: float = 2.0,
                  agentsNum: int=1000, dt: float=0.02, 
                  tqdm: bool = False, savePath: str = None, shotsnaps: int = 5, 
                  randomSeed: int = 10, overWrite: bool = False) -> None:
-        super().__init__(strengthLambda, 10, 1, speedV, phaseLag, omegaMin, deltaOmega, 
+        super().__init__(strengthLambda, 10, 1, 3, phaseLag, distribution, omegaMin, deltaOmega, 
                          agentsNum, dt, tqdm, savePath, shotsnaps, randomSeed, overWrite)
+        if initPhaseTheta is not None:
+            self.phaseTheta = initPhaseTheta
+            self.useInitPhaseTheta = True
+        else:
+            self.useInitPhaseTheta = False
 
     @property
     def pointTheta(self):
@@ -213,13 +248,17 @@ class PurePhaseModel(ChiralInducedPhaseLag):
         self.phaseTheta = np.mod(self.phaseTheta + np.pi, 2 * np.pi) - np.pi
 
     def __str__(self) -> str:
-        
+        if self.distribution == "uniform":
+            distributionInfo = f"di{self.distribution}_oM{self.omegaMin:.2f}_dO{self.deltaOmega:.1f}"
+        else:
+            distributionInfo = f"di{self.distribution}"
+
         return (
-            f"PurePhaseModel_"
-            f"_{self.strengthLambda:.3f}_{self.phaseLag:.2f}"
-            f"_{self.omegaMin:.2f}_{self.deltaOmega:.1f}"
-            f"_{self.randomSeed}"
-        )
+            f"PurePhaseModel"
+            f"_{distributionInfo}"
+            f"_l{self.strengthLambda:.3f}_a{self.phaseLag:.2f}"
+            f"_bL{self.boundaryLength}_rS{self.randomSeed}"
+        ) + ("_init" if self.useInitPhaseTheta else "")
 
 
 class StateAnalysis:
