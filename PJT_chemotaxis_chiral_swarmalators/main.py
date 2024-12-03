@@ -523,6 +523,232 @@ class GSPatternFormation(PatternFormation):
         )
         
         return name
+    
+
+class ChemotacticLotkaVolterra(PatternFormation):
+    def __init__(self, k1: float, k2: float, k3: float, k4: float,
+                 boundaryLength: float = 10, speedV: float = 3,
+                 chemoAlpha1: float = 1, chemoAlpha2: float = 1,
+                 diffusionRateD1: float = 1, diffusionRateD2: float = 1,
+                 cellNumInLine: int = 50, agentsNum: int=1000, dt: float=0.01,
+                 tqdm: bool = False, savePath: str = None, shotsnaps: int = 10,
+                 randomSeed: int = 10, overWrite: bool = False) -> None:
+        
+        np.random.seed(randomSeed)
+
+        self.randomSeed = randomSeed
+        self.cellNumInLine = cellNumInLine
+        self.cPosition = np.array(list(product(np.linspace(0, boundaryLength, cellNumInLine), repeat=2)))
+        self.dx = boundaryLength / (cellNumInLine - 1)
+        self.boundaryLength = boundaryLength
+        self.halfBoundaryLength = boundaryLength / 2
+        self.agentsNum = agentsNum
+        self.k1 = k1
+        self.k2 = k2
+        self.k3 = k3
+        self.k4 = k4
+        self.diffusionRateD1 = diffusionRateD1
+        self.diffusionRateD2 = diffusionRateD2
+        self.dt = dt
+        self.speedV = speedV
+        self.tqdm = tqdm
+        self.savePath = savePath
+        self.shotsnaps = shotsnaps
+        self.counts = 0
+        self.overWrite = overWrite
+        self.halfAgentsNum = agentsNum // 2
+        self.chemoAlpha1Mat = chemoAlpha1 * np.concatenate([
+            np.zeros(self.halfAgentsNum), np.ones(self.halfAgentsNum)
+        ])
+        self.chemoAlpha2Mat = chemoAlpha2 * np.concatenate([
+            np.ones(self.halfAgentsNum), np.zeros(self.halfAgentsNum)
+        ])
+        self.chemoAlpha1 = chemoAlpha1
+        self.chemoAlpha2 = chemoAlpha2
+        self.radius = 0.05
+
+        self.positionX = np.random.random((agentsNum, 2)) * boundaryLength
+        # self.positionX = np.concatenate([
+        #     np.random.random((self.halfAgentsNum, 2)) * boundaryLength / 2,
+        #     np.random.random((self.halfAgentsNum, 2)) * boundaryLength / 2 + boundaryLength / 2
+        # ])
+        self.phaseTheta = np.random.random(agentsNum) * 2 * np.pi - np.pi
+        self.c1 = np.random.rand(cellNumInLine, cellNumInLine)
+        self.c2 = np.random.rand(cellNumInLine, cellNumInLine)
+
+        self.temp = dict()
+        # The order of variable definitions has a dependency relationship
+        self.temp["direction"] = self._direction(self.phaseTheta)
+        self.temp["ocsiIdx"] = (self.positionX / self.dx).round().astype(int)
+        self.temp["dotTheta"] = self.dotTheta
+        self.temp["dotC1"] = self.dotC1
+        self.temp["dotC2"] = self.dotC2
+
+    @staticmethod
+    @nb.njit
+    def _calc_repulsion(divDeltaX_2: np.ndarray, distance: float, radius: float):
+        return np.sum(
+            divDeltaX_2 * (distance < radius),
+            axis=1
+        )
+
+    @property
+    def shortRepulsion(self):
+        self.temp["deltaX"] = self.deltaX
+        self.temp["distanceX2"] = self.distance_x_2(self.temp["deltaX"])
+        return self._calc_repulsion(
+            self.div_distance_power(self.temp["deltaX"], power=2), 
+            self.temp["distanceX2"], self.radius
+        )
+        # return (
+        #     self.div_distance_power(numerator=self.deltaX, power=2) * 
+        #     (self.temp["distanceX2"] < self.radius)
+        # ).sum(axis=1)
+
+    @property
+    def nablaC1(self):
+        return np.array([
+            (np.roll(self.c1, 1, axis=1) - np.roll(self.c1, -1, axis=1)) / (2 * self.dx), 
+            (np.roll(self.c1, 1, axis=0) - np.roll(self.c1, -1, axis=0)) / (2 * self.dx)
+        ]).transpose(1, 2, 0)
+    
+    @property
+    def nablaC2(self):
+        return np.array([
+            (np.roll(self.c2, 1, axis=1) - np.roll(self.c2, -1, axis=1)) / (2 * self.dx), 
+            (np.roll(self.c2, 1, axis=0) - np.roll(self.c2, -1, axis=0)) / (2 * self.dx)
+        ]).transpose(1, 2, 0)
+
+    @staticmethod
+    @nb.njit
+    def _product_c(cellNumInLine: int, ocsiIdx: np.ndarray, productRateK0: np.ndarray):
+        sumCounts = np.zeros((cellNumInLine, cellNumInLine), dtype=np.float64)
+        for idx in ocsiIdx:
+            sumCounts[idx[0], idx[1]] = sumCounts[idx[0], idx[1]] + 1
+        return sumCounts * productRateK0
+    
+    @property
+    def productC1(self):
+        return self._product_c(
+            self.cellNumInLine, 
+            self.temp["ocsiIdx"][:self.halfAgentsNum],
+            self.c1 * (self.k1 - self.k2 * self.c2)
+        )
+        # return self.c1 * (self.k1 - self.k2 * self.c2)
+    
+    @property
+    def productC2(self):
+        return self._product_c(
+            self.cellNumInLine, 
+            self.temp["ocsiIdx"][self.halfAgentsNum:],
+            self.c2 * (self.k3 * self.c1 - self.k4)
+        )
+        # return self.c2 * (self.k3 * self.c1 - self.k4)
+
+    @property
+    def chemotactic(self):
+        localGradC1 = self.nablaC1[self.temp["ocsiIdx"][:, 0], self.temp["ocsiIdx"][:, 1]]
+        localGradC2 = self.nablaC2[self.temp["ocsiIdx"][:, 0], self.temp["ocsiIdx"][:, 1]]
+        return self.chemoAlpha1Mat * (
+            self.temp["direction"][:, 0] * localGradC1[:, 1] - 
+            self.temp["direction"][:, 1] * localGradC1[:, 0]
+        ) + self.chemoAlpha2Mat * (
+            self.temp["direction"][:, 0] * localGradC2[:, 1] -
+            self.temp["direction"][:, 1] * localGradC2[:, 0]
+        )
+
+    def _nabla2(self, c):
+        center = -c
+        direct_neighbors = 0.20 * (
+            np.roll(c, 1, axis=0)
+            + np.roll(c, -1, axis=0)
+            + np.roll(c, 1, axis=1)
+            + np.roll(c, -1, axis=1)
+        )
+        diagonal_neighbors = 0.05 * (
+            np.roll(np.roll(c, 1, axis=0), 1, axis=1)
+            + np.roll(np.roll(c, -1, axis=0), 1, axis=1)
+            + np.roll(np.roll(c, -1, axis=0), -1, axis=1)
+            + np.roll(np.roll(c, 1, axis=0), -1, axis=1)
+        )
+
+        out_array = center + direct_neighbors + diagonal_neighbors
+        return out_array / (self.dx ** 2)
+    
+    @property
+    def diffusionC1(self):
+        return self._nabla2(self.c1) * self.diffusionRateD1
+    
+    @property
+    def diffusionC2(self):
+        return self._nabla2(self.c2) * self.diffusionRateD2
+    
+    @property
+    def dotC1(self):
+        return self.productC1 + self.diffusionC1
+    
+    @property
+    def dotC2(self):
+        return self.productC2 + self.diffusionC2
+    
+    @property
+    def dotTheta(self):
+        return self.chemotactic
+        # return self._dotTheta(self.phaseTheta, self.chemotactic, 
+        #                       0, 0)
+
+    @staticmethod
+    @nb.njit
+    def _dotTheta(phaseTheta: np.ndarray, 
+                  chemotactic: np.ndarray, strengthLambda: float, 
+                  A: np.ndarray):
+        # adjMatrixTheta = (
+        #     np.repeat(phaseTheta, phaseTheta.shape[0])
+        #     .reshape(phaseTheta.shape[0], phaseTheta.shape[0])
+        # )
+        return chemotactic
+        # + strengthLambda * np.sum(A * np.sin(
+        #     adjMatrixTheta - phaseTheta
+        # ), axis=0)
+
+    def update(self):
+        self.temp["ocsiIdx"] = (self.positionX / self.dx).round().astype(int)
+        self.temp["dotTheta"] = self.dotTheta
+        self.temp["dotC1"] = self.dotC1
+        self.temp["dotC2"] = self.dotC2
+        self.temp["direction"] = self._direction(self.phaseTheta)
+        self.positionX = np.mod(
+            self.positionX + (self.speedV * self.temp["direction"] + self.shortRepulsion) * self.dt, 
+            self.boundaryLength
+        )
+        self.phaseTheta += self.temp["dotTheta"] * self.dt
+        self.phaseTheta = np.mod(self.phaseTheta + np.pi, 2 * np.pi) - np.pi
+        self.c1 += self.temp["dotC1"] * self.dt
+        self.c2 += self.temp["dotC2"] * self.dt
+        self.c1[self.c1 < 0] = 0
+        self.c2[self.c2 < 0] = 0
+    
+    def append(self):
+        if self.store is not None:
+            if self.counts % self.shotsnaps != 0:
+                return
+            self.store.append(key="positionX", value=pd.DataFrame(self.positionX))
+            self.store.append(key="phaseTheta", value=pd.DataFrame(self.phaseTheta))
+            self.store.append(key="dotTheta", value=pd.DataFrame(self.temp["dotTheta"]))
+            self.store.append(key="c1", value=pd.DataFrame(self.c1))
+            self.store.append(key="c2", value=pd.DataFrame(self.c2))
+
+    def __str__(self) -> str:
+                
+        name =  (
+            f"CLV_K1{self.k1:.3f}_K2{self.k2:.3f}_K3{self.k3:.3f}_K4{self.k4:.3f}"
+            f"_a1{self.chemoAlpha1:.1f}_a2{self.chemoAlpha2:.1f}"
+            f"_D1{self.diffusionRateD1:.3f}_D2{self.diffusionRateD2:.3f}"
+            f"_sV{self.speedV:.1f}"
+            f"_r{self.randomSeed}"
+        )
+        
+        return name
 
 
 class StateAnalysis:
