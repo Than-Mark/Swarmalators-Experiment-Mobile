@@ -115,13 +115,21 @@ class PatternFormation(Swarmalators2D):
     def plot(self, ax: plt.Axes = None):
         if ax is None:
             _, ax = plt.subplots(figsize=(5, 5))
+        ax.scatter(
+            self.positionX[:self.agentsNum // 2, 0], self.positionX[:self.agentsNum // 2, 1],
+            color="#F8B08E", s=2.5e4  # edgecolors="black"
+        )
+        ax.scatter(
+            self.positionX[self.agentsNum // 2:, 0], self.positionX[self.agentsNum // 2:, 1],
+            color="#9BD5D5", s=2.5e4  # edgecolors="black"
+        )
         ax.quiver(
             self.positionX[:self.agentsNum // 2, 0], self.positionX[:self.agentsNum // 2, 1],
-            np.cos(self.phaseTheta[:self.agentsNum // 2]), np.sin(self.phaseTheta[:self.agentsNum // 2]), color='tomato'
+            np.cos(self.phaseTheta[:self.agentsNum // 2]), np.sin(self.phaseTheta[:self.agentsNum // 2]), color="#F16623"
         )
         ax.quiver(
             self.positionX[self.agentsNum // 2:, 0], self.positionX[self.agentsNum // 2:, 1],
-            np.cos(self.phaseTheta[self.agentsNum // 2:]), np.sin(self.phaseTheta[self.agentsNum // 2:]), color='dodgerblue'
+            np.cos(self.phaseTheta[self.agentsNum // 2:]), np.sin(self.phaseTheta[self.agentsNum // 2:]), color="#49B2B2"
         )
         ax.set_xlim(0, self.boundaryLength)
         ax.set_ylim(0, self.boundaryLength)
@@ -565,7 +573,7 @@ class ChemotacticLotkaVolterra(PatternFormation):
         ])
         self.chemoAlpha1 = chemoAlpha1
         self.chemoAlpha2 = chemoAlpha2
-        self.radius = 0.05
+        self.diameter = 0.1
 
         self.positionX = np.random.random((agentsNum, 2)) * boundaryLength
         # self.positionX = np.concatenate([
@@ -586,19 +594,16 @@ class ChemotacticLotkaVolterra(PatternFormation):
 
     @staticmethod
     @nb.njit
-    def _calc_repulsion(divDeltaX_2: np.ndarray, distance: float, radius: float):
-        return np.sum(
-            divDeltaX_2 * (distance < radius),
-            axis=1
-        )
+    def _calc_repulsion(divDeltaX_2: np.ndarray, distance: float, diameter: float):
+        return np.sum(divDeltaX_2 * (distance < diameter), axis=1)
 
     @property
     def shortRepulsion(self):
         self.temp["deltaX"] = self.deltaX
         self.temp["distanceX2"] = self.distance_x_2(self.temp["deltaX"])
-        return self._calc_repulsion(
+        return -self._calc_repulsion(
             self.div_distance_power(self.temp["deltaX"], power=2), 
-            self.temp["distanceX2"], self.radius
+            self.temp["distanceX2"], self.diameter
         )
         # return (
         #     self.div_distance_power(numerator=self.deltaX, power=2) * 
