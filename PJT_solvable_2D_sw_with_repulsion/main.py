@@ -79,7 +79,7 @@ class Solvable2DWithRepulsion(Swarmalators2D):
         """
         Effect of phase similarity on spatial attraction: J * cos(theta_j - theta_i)
         """
-        return self.J * np.cos(self.temp["deltaTheta"]) + 1
+        return self.J * np.cos(self.temp["deltaTheta"])
     
     @property
     def Frep(self) -> np.ndarray:
