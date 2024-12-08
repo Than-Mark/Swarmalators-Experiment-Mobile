@@ -59,9 +59,9 @@ class ShortRangePhaseInter(Swarmalators2D):
     @property
     def Fatt(self) -> np.ndarray:
         """
-        Effect of phase similarity on spatial attraction: 1 + J * cos(theta_j - theta_i)
+        Effect of phase similarity on spatial attraction: 1 + J * A * cos(theta_j - theta_i)
         """
-        return 1 + self.J * np.cos(self.temp["deltaTheta"])
+        return 1 + self.J * self.A * np.cos(self.temp["deltaTheta"])
 
     @property
     def Frep(self) -> np.ndarray:
