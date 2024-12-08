@@ -13,3 +13,7 @@ test.ipynb
 *.npy
 *.parquet
 */.ipynb_checkpoints/
+\[PJT_XYX]_chiral_swarmalators/PCT_Springer/
+\[PJT_XYX]_chiral_swarmalators/bigGraph.pdf
+\[PJT]_chiral_distance_weighted_coupling/bigGraph.pdf
+\[PJT]_chiral_distance_weighted_coupling/PCT_Springer/

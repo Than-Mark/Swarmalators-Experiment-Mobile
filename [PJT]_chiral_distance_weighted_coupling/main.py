@@ -56,17 +56,18 @@ from swarmalatorlib.template import Swarmalators2D
 
 class DisWgtCouple(Swarmalators2D):
     def __init__(self, strengthLambda: float, alpha: float, boundaryLength: float = 10, 
-                 typeA: str = "distanceWgt", agentsNum: int=1000, dt: float=0.01, 
+                 typeA: str = "exp", agentsNum: int=1000, dt: float=0.01, beta: float = 1,
                  tqdm: bool = False, savePath: str = None, shotsnaps: int = 10, 
                  distribution: str = "uniform", randomSeed: int = 10, overWrite: bool = False) -> None:
         assert distribution in ["uniform", "normal"]
-        assert typeA in ["heaviside", "distanceWgt"]
+        assert typeA in ["heaviside", "exp", "fermi"]
 
         np.random.seed(randomSeed)
         self.positionX = np.random.random((agentsNum, 2)) * boundaryLength
         self.phaseTheta = np.random.random(agentsNum) * 2 * np.pi - np.pi
         self.agentsNum = agentsNum
         self.dt = dt
+        self.beta = beta
         self.speedV = 3
         self.alpha = alpha
         if distribution == "uniform":
@@ -111,8 +112,10 @@ class DisWgtCouple(Swarmalators2D):
     def A(self):
         if self.typeA == "heaviside":
             return self.distance_x(self.deltaX) <= self.alpha
-        elif self.typeA == "distanceWgt":
+        elif self.typeA == "exp":
             return np.exp(-self.distance_x(self.deltaX) / self.alpha)
+        elif self.typeA == "fermi":
+            return 1 / (1 + np.exp(self.beta * (self.distance_x(self.deltaX) - self.alpha)))
 
     @property
     def deltaX(self) -> np.ndarray:
@@ -162,7 +165,7 @@ class DisWgtCouple(Swarmalators2D):
 
     def __str__(self) -> str:
         
-        name =  f"CorrectCoupling_{self.distribution}_{self.strengthLambda:.3f}_{self.alpha:.2f}_{self.randomSeed}"
+        name =  f"CorrectCoupling_{self.distribution}_{self.typeA}_{self.strengthLambda:.3f}_{self.alpha:.2f}_{self.randomSeed}"
         
         return name
 
@@ -174,7 +177,7 @@ class DisWgtCouple(Swarmalators2D):
 class VariableParam(DisWgtCouple):
     def __init__(self, strengthLambda: float, alpha: float, 
                  lambdaArray: np.ndarray = None, alphaArray: np.ndarray = None,
-                 boundaryLength: float = 10, typeA: str = "distanceWgt", agentsNum: int=1000, dt: float=0.01, 
+                 boundaryLength: float = 10, typeA: str = "exp", agentsNum: int=1000, dt: float=0.01, 
                  tqdm: bool = False, savePath: str = None, shotsnaps: int = 10,
                  distribution: str = "uniform", randomSeed: int = 10, overWrite: bool = False):
         super().__init__(strengthLambda, alpha, boundaryLength, typeA, agentsNum, dt, tqdm, savePath, shotsnaps, distribution, randomSeed, overWrite)
