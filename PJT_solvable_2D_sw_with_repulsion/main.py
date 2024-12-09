@@ -2,7 +2,10 @@ import matplotlib.colors as mcolors
 import matplotlib.animation as ma
 import matplotlib.pyplot as plt
 from multiprocessing import Pool
-from tqdm import tqdm
+if "ipykernel_launcher.py" in sys.argv[0]:
+    from tqdm.notebook import tqdm
+else:
+    from tqdm import tqdm
 from itertools import product
 import pandas as pd
 import numpy as np
@@ -77,9 +80,9 @@ class Solvable2DWithRepulsion(Swarmalators2D):
     @property 
     def Fatt(self) -> np.ndarray:
         """
-        Effect of phase similarity on spatial attraction: J * cos(theta_j - theta_i)
+        Effect of phase similarity on spatial attraction: J * cos(theta_j - theta_i) + 1
         """
-        return self.J * np.cos(self.temp["deltaTheta"])
+        return self.J * np.cos(self.temp["deltaTheta"]) + 1
     
     @property
     def Frep(self) -> np.ndarray:
@@ -169,3 +172,133 @@ class Solvable2DWithRepulsion(Swarmalators2D):
             f"seed.{self.randomSeed}"
         )
         return name
+    
+
+class StateAnalysis:
+    def __init__(self, model: Solvable2DWithRepulsion = None, lookIndex: int = -1, showTqdm: bool = False):
+        self.lookIndex = lookIndex
+        self.showTqdm = showTqdm
+
+        if model is not None:
+            self.model = model
+            targetPath = f"{self.model.savePath}/{self.model}.h5"
+            totalPositionX = pd.read_hdf(targetPath, key="positionX")
+            totalPhaseTheta = pd.read_hdf(targetPath, key="phaseTheta")
+            # totalPointX = pd.read_hdf(targetPath, key="pointX")
+            # totalPointTheta = pd.read_hdf(targetPath, key="pointTheta")
+            # totalDrivePosAndPhs = pd.read_hdf(targetPath, key="drivePosAndPhs")
+            
+            TNum = totalPositionX.shape[0] // self.model.agentsNum
+            self.TNum = TNum
+            self.tRange = np.arange(0, (TNum - 1) * model.shotsnaps, model.shotsnaps) * self.model.dt
+            self.totalPositionX = totalPositionX.values.reshape(TNum, self.model.agentsNum, 2)
+            self.totalPhaseTheta = totalPhaseTheta.values.reshape(TNum, self.model.agentsNum)
+            # self.totalPointX = totalPointX.values.reshape(TNum, self.model.agentsNum, 2)
+            # self.totalPointTheta = totalPointTheta.values.reshape(TNum, self.model.agentsNum)
+            # totalDrivePosAndPhs = totalDrivePosAndPhs.values.reshape(TNum, 3)
+            # self.totalDrivePosition = totalDrivePosAndPhs[:, :2]
+            # self.totalDrivePhaseTheta = totalDrivePosAndPhs[:, 2]
+
+            if self.showTqdm:
+                self.iterObject = tqdm(range(1, self.totalPhaseTheta.shape[0]))
+            else:
+                self.iterObject = range(1, self.totalPhaseTheta.shape[0])
+
+    def get_state(self, index: int = -1):
+        return self.totalPositionX[index], self.totalPhaseTheta[index]
+
+    @staticmethod
+    def calc_order_parameter_R(model: Solvable2DWithRepulsion) -> float:
+        return np.abs(np.sum(np.exp(1j * model.phaseTheta))) / model.agentsNum
+    
+    @staticmethod
+    def calc_order_parameter_S(model: Solvable2DWithRepulsion) -> float:
+        phi = np.arctan2(model.positionX[:, 1], model.positionX[:, 0])
+        Sadd = np.abs(np.sum(np.exp(1j * (phi + model.phaseTheta)))) / model.agentsNum
+        Ssub = np.abs(np.sum(np.exp(1j * (phi - model.phaseTheta)))) / model.agentsNum
+        return np.max([Sadd, Ssub])
+
+    @staticmethod
+    def calc_order_parameter_Vp(model: Solvable2DWithRepulsion) -> float:
+        pointX = model.temp["pointX"]
+        phi = np.arctan2(pointX[:, 1], pointX[:, 0])
+        return np.abs(np.sum(np.exp(1j * phi))) / model.agentsNum
+    
+    @staticmethod
+    def calc_order_parameter_Ptr(model: Solvable2DWithRepulsion) -> float:
+        pointTheta = model.temp["pointTheta"]
+        Ntr = np.abs(pointTheta - model.driveThateVelocityOmega) < 0.2 / model.dt * 0.1
+        return Ntr.sum() / model.agentsNum
+    
+    def plot_last_state(self, model: Solvable2DWithRepulsion = None, ax: plt.Axes = None, withColorBar: bool =True, 
+                        s: float = 50, driveS: float = 100) -> None:
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(5, 4))
+
+        if model is not None:
+            sc = ax.scatter(model.positionX[:, 0], model.positionX[:, 1], s=s,
+                            c=model.phaseTheta, cmap=new_cmap, alpha=0.8, vmin=0, vmax=2*np.pi)
+            maxPos = np.abs(model.positionX).max()
+        else:
+            sc = ax.scatter(self.totalPositionX[self.lookIndex, :, 0], self.totalPositionX[self.lookIndex, :, 1], s=s,
+                            c=self.totalPhaseTheta[self.lookIndex], cmap=new_cmap, alpha=0.8, vmin=0, vmax=2*np.pi)
+            maxPos = np.abs(self.totalPositionX[self.lookIndex]).max()
+            
+        # ax.set_xlim(0, 2*np.pi)
+        # ax.set_xticks([0, np.pi, 2*np.pi])
+        # ax.set_xticklabels(['$0$', '$\pi$', '$2\pi$'])
+        # ax.set_ylim(0, 2*np.pi)
+        # ax.set_yticks([0, np.pi, 2*np.pi])
+        # ax.set_yticklabels(['$0$', '$\pi$', '$2\pi$'])
+        
+        if withColorBar:
+            cbar = plt.colorbar(sc, ticks=[0, np.pi, 2*np.pi], ax=ax)
+            cbar.ax.set_ylim(0, 2*np.pi)
+            cbar.ax.set_yticklabels(['$0$', '$\pi$', '$2\pi$'])
+
+
+def draw_mp4(model: Solvable2DWithRepulsion, savePath: str = "./data", mp4Path: str = "./mp4", 
+             step: int = 1, earlyStop: int = None, fixLim: bool = True) -> None:
+
+    targetPath = f"{savePath}/{model}.h5"
+    totalPositionX = pd.read_hdf(targetPath, key="positionX")
+    totalPhaseTheta = pd.read_hdf(targetPath, key="phaseTheta")
+    TNum = totalPositionX.shape[0] // model.agentsNum
+    totalPositionX = totalPositionX.values.reshape(TNum, model.agentsNum, 2)
+    totalPhaseTheta = totalPhaseTheta.values.reshape(TNum, model.agentsNum)
+    sa = StateAnalysis(showTqdm=True)
+
+    if earlyStop is not None:
+        totalPositionX = totalPositionX[:earlyStop]
+        totalPhaseTheta = totalPhaseTheta[:earlyStop]
+        TNum = earlyStop
+
+    def plot_frame(i):
+        positionX = totalPositionX[i]
+        phaseTheta = totalPhaseTheta[i]
+
+        fig.clear()
+        fig.subplots_adjust(left=0.15, right=1, bottom=0.1, top=0.95)
+        ax1 = plt.subplot(1, 1, 1)
+        model.positionX = positionX
+        model.phaseTheta = phaseTheta
+        model.counts = i * model.shotsnaps
+        StateAnalysis.plot_last_state(sa, model, ax1)
+        if fixLim:
+            ax1.set_xlim(0, 2*np.pi)
+            ax1.set_xticks([0, np.pi, 2*np.pi])
+            ax1.set_xticklabels(['$0$', '$\pi$', '$2\pi$'])
+            ax1.set_ylim(0, 2*np.pi)
+            ax1.set_yticks([0, np.pi, 2*np.pi])
+            ax1.set_yticklabels(['$0$', '$\pi$', '$2\pi$'])
+        plt.tight_layout()
+        pbar.update(1)
+
+    frames = np.arange(0, TNum, step)
+    pbar = tqdm(total=len(frames) + 1)
+    fig, ax = plt.subplots(figsize=(6, 5))
+    ani = ma.FuncAnimation(fig, plot_frame, frames=frames, interval=50, repeat=False)
+    ani.save(f"{mp4Path}/{model}.mp4", dpi=150)
+    plt.close()
+
+    pbar.close()
