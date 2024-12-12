@@ -257,8 +257,12 @@ class PurePhaseModel(ChiralInducedPhaseLag):
             f"PurePhaseModel"
             f"_{distributionInfo}"
             f"_l{self.strengthLambda:.3f}_a{self.phaseLag:.2f}"
-            f"_bL{self.boundaryLength}_rS{self.randomSeed}"
-        ) + ("_init" if self.useInitPhaseTheta else "")
+            f"_rS{self.randomSeed}"
+        ) + (
+            "_init" if self.useInitPhaseTheta else ""
+        ) + (
+            f"_oM{self.omegaMin:.2f}_dO{self.deltaOmega:.1f}" if self.distribution == "uniform" else ""
+        )
 
 
 class StateAnalysis:
