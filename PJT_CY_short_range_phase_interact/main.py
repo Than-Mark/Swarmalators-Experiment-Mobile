@@ -55,6 +55,7 @@ class ShortRangePhaseInter(Swarmalators2D):
         self.J = J
         self.d0 = d0
         self.one = np.ones((agentsNum, agentsNum))
+        self.randomSeed = randomSeed
 
     @property
     def Fatt(self) -> np.ndarray:
