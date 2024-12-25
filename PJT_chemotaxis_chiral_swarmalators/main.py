@@ -117,11 +117,11 @@ class PatternFormation(Swarmalators2D):
             _, ax = plt.subplots(figsize=(5, 5))
         ax.scatter(
             self.positionX[:self.agentsNum // 2, 0], self.positionX[:self.agentsNum // 2, 1],
-            color="#F8B08E", s=2.5e4  # edgecolors="black"
+            color="#F8B08E", s=10  # edgecolors="black"
         )
         ax.scatter(
             self.positionX[self.agentsNum // 2:, 0], self.positionX[self.agentsNum // 2:, 1],
-            color="#9BD5D5", s=2.5e4  # edgecolors="black"
+            color="#9BD5D5", s=10  # edgecolors="black"
         )
         ax.quiver(
             self.positionX[:self.agentsNum // 2, 0], self.positionX[:self.agentsNum // 2, 1],
@@ -535,7 +535,8 @@ class GSPatternFormation(PatternFormation):
 
 class ChemotacticLotkaVolterra(PatternFormation):
     def __init__(self, k1: float, k2: float, k3: float, k4: float,
-                 boundaryLength: float = 10, speedV: float = 3,
+                 boundaryLength: float = 10, speedV: float = 3, 
+                 diameter: float = 0.1, repelPower: float = 1,
                  chemoAlpha1: float = 1, chemoAlpha2: float = 1,
                  diffusionRateD1: float = 1, diffusionRateD2: float = 1,
                  cellNumInLine: int = 50, agentsNum: int=1000, dt: float=0.01,
@@ -573,7 +574,8 @@ class ChemotacticLotkaVolterra(PatternFormation):
         ])
         self.chemoAlpha1 = chemoAlpha1
         self.chemoAlpha2 = chemoAlpha2
-        self.diameter = 0.1
+        self.diameter = diameter
+        self.repelPower = repelPower
 
         self.positionX = np.random.random((agentsNum, 2)) * boundaryLength
         # self.positionX = np.concatenate([
@@ -592,6 +594,28 @@ class ChemotacticLotkaVolterra(PatternFormation):
         self.temp["dotC1"] = self.dotC1
         self.temp["dotC2"] = self.dotC2
 
+    def plot(self, ax: plt.Axes = None):
+        if ax is None:
+            _, ax = plt.subplots(figsize=(5, 5))
+        ax.scatter(
+            self.positionX[:self.agentsNum // 2, 0], self.positionX[:self.agentsNum // 2, 1],
+            color="#F8B08E", s=100 * self.diameter / 0.1 * (2.5 / self.boundaryLength) # edgecolors="black"
+        )
+        ax.scatter(
+            self.positionX[self.agentsNum // 2:, 0], self.positionX[self.agentsNum // 2:, 1],
+            color="#9BD5D5", s=100 * self.diameter / 0.1 * (2.5 / self.boundaryLength)  # edgecolors="black"
+        )
+        ax.quiver(
+            self.positionX[:self.agentsNum // 2, 0], self.positionX[:self.agentsNum // 2, 1],
+            np.cos(self.phaseTheta[:self.agentsNum // 2]), np.sin(self.phaseTheta[:self.agentsNum // 2]), color="#F16623"
+        )
+        ax.quiver(
+            self.positionX[self.agentsNum // 2:, 0], self.positionX[self.agentsNum // 2:, 1],
+            np.cos(self.phaseTheta[self.agentsNum // 2:]), np.sin(self.phaseTheta[self.agentsNum // 2:]), color="#49B2B2"
+        )
+        ax.set_xlim(0, self.boundaryLength)
+        ax.set_ylim(0, self.boundaryLength)
+
     @staticmethod
     @nb.njit
     def _calc_repulsion(divDeltaX_2: np.ndarray, distance: float, diameter: float):
@@ -602,8 +626,9 @@ class ChemotacticLotkaVolterra(PatternFormation):
         self.temp["deltaX"] = self.deltaX
         self.temp["distanceX2"] = self.distance_x_2(self.temp["deltaX"])
         return -self._calc_repulsion(
-            self.div_distance_power(self.temp["deltaX"], power=2), 
-            self.temp["distanceX2"], self.diameter
+            divDeltaX_2=self.div_distance_power(self.temp["deltaX"], power=self.repelPower), 
+            distance=self.temp["distanceX2"], 
+            diameter=self.diameter
         )
         # return (
         #     self.div_distance_power(numerator=self.deltaX, power=2) * 
@@ -749,7 +774,8 @@ class ChemotacticLotkaVolterra(PatternFormation):
             f"CLV_K1{self.k1:.3f}_K2{self.k2:.3f}_K3{self.k3:.3f}_K4{self.k4:.3f}"
             f"_a1{self.chemoAlpha1:.1f}_a2{self.chemoAlpha2:.1f}"
             f"_D1{self.diffusionRateD1:.3f}_D2{self.diffusionRateD2:.3f}"
-            f"_sV{self.speedV:.1f}"
+            f"_sV{self.speedV:.1f}_d{self.diameter:.1f}_rP{self.repelPower:.1f}"
+            f"_bL{self.boundaryLength:.1f}_dt{self.dt:.2f}_cN{self.cellNumInLine}"
             f"_r{self.randomSeed}"
         )
         
@@ -757,7 +783,7 @@ class ChemotacticLotkaVolterra(PatternFormation):
 
 
 class StateAnalysis:
-    def __init__(self, model: PatternFormation = None, classDistance: float = 2, 
+    def __init__(self, model: ChemotacticLotkaVolterra = None, classDistance: float = 2, 
                  lookIndex: int = -1, showTqdm: bool = False):
         
         self.classDistance = classDistance
@@ -770,12 +796,18 @@ class StateAnalysis:
             totalPositionX = pd.read_hdf(targetPath, key="positionX")
             totalPhaseTheta = pd.read_hdf(targetPath, key="phaseTheta")
             totalDotTheta = pd.read_hdf(targetPath, key="dotTheta")
+            totalC1 = pd.read_hdf(targetPath, key="c1")
+            totalC2 = pd.read_hdf(targetPath, key="c2")
             
             TNum = totalPositionX.shape[0] // self.model.agentsNum
             self.TNum = TNum
             self.totalPositionX = totalPositionX.values.reshape(TNum, self.model.agentsNum, 2)
             self.totalPhaseTheta = totalPhaseTheta.values.reshape(TNum, self.model.agentsNum)
             self.totalDotTheta = totalDotTheta.values.reshape(TNum, self.model.agentsNum)
+            self.totalC1 = totalC1.values.reshape(TNum, model.cellNumInLine, model.cellNumInLine)
+            self.totalC2 = totalC2.values.reshape(TNum, model.cellNumInLine, model.cellNumInLine)
+            self.maxC1 = totalC1.values.max()
+            self.maxC2 = totalC2.values.max()
 
             if self.showTqdm:
                 self.iterObject = tqdm(range(1, self.totalPhaseTheta.shape[0]))
@@ -896,10 +928,18 @@ class StateAnalysis:
             fig, ax = plt.subplots(figsize=(6, 6))
         if oscis is None:
             oscis = np.arange(self.model.agentsNum)
-
+        ax.scatter(
+            positionX[oscis, 0], positionX[oscis, 1],
+            s=100 * self.model.diameter / 0.1 * (2.5 / self.model.boundaryLength), 
+            color=["#F8B08E"] * self.model.halfAgentsNum + ["#9BD5D5"] * self.model.halfAgentsNum,
+            **kwargs
+        )
         ax.quiver(
             positionX[oscis, 0], positionX[oscis, 1],
-            np.cos(phaseTheta[oscis]), np.sin(phaseTheta[oscis]), **kwargs
+            np.cos(phaseTheta[oscis]), np.sin(phaseTheta[oscis]), 
+            color=["#F16623"] * self.model.halfAgentsNum + ["#49B2B2"] * self.model.halfAgentsNum, 
+            width=0.006, scale=18,
+            **kwargs
         )
         ax.set_xlim(0, self.model.boundaryLength)
         ax.set_ylim(0, self.model.boundaryLength)    
