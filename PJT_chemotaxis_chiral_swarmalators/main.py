@@ -660,31 +660,31 @@ class ChemotacticLotkaVolterra(PatternFormation):
     @property
     def productC1(self):
         return self._product_c(
-            self.cellNumInLine, 
-            self.temp["ocsiIdx"][:self.halfAgentsNum],
-            self.c1 * (self.k1 - self.k2 * self.c2)
+            cellNumInLine=self.cellNumInLine, 
+            ocsiIdx=self.temp["ocsiIdx"][:self.halfAgentsNum],
+            productRateK0=self.c1 * (self.k1 - self.k2 * self.c2)
         )
         # return self.c1 * (self.k1 - self.k2 * self.c2)
     
     @property
     def productC2(self):
         return self._product_c(
-            self.cellNumInLine, 
-            self.temp["ocsiIdx"][self.halfAgentsNum:],
-            self.c2 * (self.k3 * self.c1 - self.k4)
+            cellNumInLine=self.cellNumInLine, 
+            ocsiIdx=self.temp["ocsiIdx"][self.halfAgentsNum:],
+            productRateK0=self.c2 * (self.k3 * self.c1 - self.k4)
         )
         # return self.c2 * (self.k3 * self.c1 - self.k4)
 
     @property
     def chemotactic(self):
         localGradC1 = self.nablaC1[self.temp["ocsiIdx"][:, 0], self.temp["ocsiIdx"][:, 1]]
+        phiC1 = np.arctan2(localGradC1[:, 1], localGradC1[:, 0])
         localGradC2 = self.nablaC2[self.temp["ocsiIdx"][:, 0], self.temp["ocsiIdx"][:, 1]]
+        phiC2 = np.arctan2(localGradC2[:, 1], localGradC2[:, 0])
         return self.chemoAlpha1Mat * (
-            self.temp["direction"][:, 0] * localGradC1[:, 1] - 
-            self.temp["direction"][:, 1] * localGradC1[:, 0]
+            np.linalg.norm(localGradC1, axis=1) * np.cos(phiC1 - self.phaseTheta)
         ) + self.chemoAlpha2Mat * (
-            self.temp["direction"][:, 0] * localGradC2[:, 1] -
-            self.temp["direction"][:, 1] * localGradC2[:, 0]
+            np.linalg.norm(localGradC2, axis=1) * np.cos(phiC2 - self.phaseTheta)
         )
 
     def _nabla2(self, c):
@@ -715,11 +715,11 @@ class ChemotacticLotkaVolterra(PatternFormation):
     
     @property
     def dotC1(self):
-        return self.productC1 + self.diffusionC1
+        return self.productC1 + self.diffusionC1  # - self.decayRateKd1 * self.c1
     
     @property
     def dotC2(self):
-        return self.productC2 + self.diffusionC2
+        return self.productC2 + self.diffusionC2  # - self.decayRateKd2 * self.c2
     
     @property
     def dotTheta(self):
