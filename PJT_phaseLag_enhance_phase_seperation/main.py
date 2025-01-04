@@ -437,17 +437,23 @@ class StateAnalysis:
         )
         return {i + 1: classes[i] for i in range(len(classes))}, centers
 
-    def plot_spatial(self, ax: plt.Axes = None, oscis: np.ndarray = None, index: int = -1, **kwargs):
-        positionX, phaseTheta, pointTheta = self.get_state(index)
+    def plot_spatial(self, ax: plt.Axes = None, index: int = -1):
+        positionX, phaseTheta, _ = self.get_state(index)
 
         if ax is None:
             fig, ax = plt.subplots(figsize=(6, 6))
-        if oscis is None:
-            oscis = np.arange(self.model.agentsNum)
 
+        halfAgentsNum = self.model.agentsNum // 2
+        ax.scatter(positionX[:halfAgentsNum, 0], positionX[:halfAgentsNum, 1], color="#FFC8C8")
+        ax.scatter(positionX[halfAgentsNum:, 0], positionX[halfAgentsNum:, 1], color="#99B7E7")
         ax.quiver(
-            positionX[oscis, 0], positionX[oscis, 1],
-            np.cos(phaseTheta[oscis]), np.sin(phaseTheta[oscis]), **kwargs
+            positionX[:halfAgentsNum, 0], positionX[:halfAgentsNum, 1],
+            np.cos(phaseTheta[:halfAgentsNum]), np.sin(phaseTheta[:halfAgentsNum]), 
+            color="red", alpha=0.8
+        )
+        ax.quiver(
+            positionX[halfAgentsNum:, 0], positionX[halfAgentsNum:, 1],
+            np.cos(phaseTheta[halfAgentsNum:]), np.sin(phaseTheta[halfAgentsNum:]), color="#414CC7"
         )
         ax.set_xlim(0, self.model.boundaryLength)
         ax.set_ylim(0, self.model.boundaryLength)    
