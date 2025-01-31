@@ -568,10 +568,10 @@ class ChemotacticLotkaVolterra(PatternFormation):
         self.halfAgentsNum = agentsNum // 2
         self.chemoAlpha1Mat = chemoAlpha1 * np.concatenate([
             np.ones(self.halfAgentsNum), np.zeros(self.halfAgentsNum)
-        ])
+        ]).reshape(-1, 1)
         self.chemoAlpha2Mat = chemoAlpha2 * np.concatenate([
             np.zeros(self.halfAgentsNum), np.ones(self.halfAgentsNum)
-        ])
+        ]).reshape(-1, 1)
         self.chemoAlpha1 = chemoAlpha1
         self.chemoAlpha2 = chemoAlpha2
         self.diameter = diameter
@@ -692,6 +692,12 @@ class ChemotacticLotkaVolterra(PatternFormation):
             self.chemoAlpha2Mat * np.linalg.norm(localGradC2, axis=1) * np.sin(phiC2 - self.phaseTheta)
         )
 
+    @property
+    def localGradient(self):
+        localGradC1 = self.nablaC1[self.temp["ocsiIdx"][:, 0], self.temp["ocsiIdx"][:, 1]]
+        localGradC2 = self.nablaC2[self.temp["ocsiIdx"][:, 0], self.temp["ocsiIdx"][:, 1]]
+        return self.chemoAlpha1Mat * localGradC1 + self.chemoAlpha2Mat * localGradC2
+
     def _nabla2(self, c):
         center = -c
         direct_neighbors = 0.20 * (
@@ -728,7 +734,7 @@ class ChemotacticLotkaVolterra(PatternFormation):
     
     @property
     def dotTheta(self):
-        return self.chemotactic
+        return self.phaseTheta * 0  # self.chemotactic
         # return self._dotTheta(self.phaseTheta, self.chemotactic, 
         #                       0, 0)
 
@@ -751,7 +757,7 @@ class ChemotacticLotkaVolterra(PatternFormation):
         self.temp["dotTheta"] = self.dotTheta
         self.temp["dotC1"] = self.dotC1
         self.temp["dotC2"] = self.dotC2
-        self.temp["direction"] = self._direction(self.phaseTheta)
+        self.temp["direction"] = self.localGradient  # self._direction(self.phaseTheta)
         self.positionX = np.mod(
             self.positionX + (self.speedV * self.temp["direction"] + self.shortRepulsion) * self.dt, 
             self.boundaryLength

@@ -71,11 +71,11 @@ def draw_frame(sa: StateAnalysis, idx: int):
 
 
 model = ChemotacticLotkaVolterra(
-    k1=0.01, k2=0.5, k3=0.5, k4=0.01,
+    k1=0.19, k2=0.4, k3=0.4, k4=0.28,
     boundaryLength=10, speedV=0.1, 
-    diameter=0.4, repelPower=1,
+    diameter=0.3, repelPower=1,
     cellNumInLine=100, agentsNum=200,
-    chemoAlpha1=-5, chemoAlpha2=-5,
+    chemoAlpha1=-10, chemoAlpha2=-10,
     diffusionRateD1=0.01, diffusionRateD2=0.01,
     dt=0.1, shotsnaps=5,
     tqdm=True, savePath=SAVE_PATH, overWrite=True
