@@ -38,7 +38,7 @@ from swarmalatorlib.template import Swarmalators2D
 
 class ChiralActiveMatter(Swarmalators2D):
     def __init__(self, strengthLambda: float, distanceD0: float, 
-                 boundaryLength: float = 10, speedV: float = 3.0,
+                 boundaryLength: float = 10, speedV: float = 1.0,
                  agentsNum: int=1000, dt: float=0.01, 
                  tqdm: bool = False, savePath: str = None, shotsnaps: int = 5, 
                  distribution: str = "uniform", randomSeed: int = 10, overWrite: bool = False) -> None:
@@ -157,7 +157,7 @@ class ChiralActiveMatter(Swarmalators2D):
 class ChiralActiveMatterNonreciprocalReact(ChiralActiveMatter):
     def __init__(self, strengthLambda: float, 
                  distanceD0Mean: float, distanceD0Std: float = 0, 
-                 chiralNum: int = 1, agentsNum: int=1000, dt: float=0.1, 
+                 chiralNum: int = 1, agentsNum: int=1000, dt: float=0.01, 
                  tqdm: bool = False, savePath: str = None, shotsnaps: int = 5, 
                  d0Distribution: str = "uniform", omegaDistribution: str = "uniform",
                  randomSeed: int = 10, overWrite: bool = False) -> None:
@@ -166,6 +166,7 @@ class ChiralActiveMatterNonreciprocalReact(ChiralActiveMatter):
         
         assert chiralNum in [1, 2], "chiralNum must be 1 or 2"
         self.chiralNum = chiralNum
+        self.strengthLambda = strengthLambda
         self.distanceD0Mean = distanceD0Mean
         self.distanceD0Std = distanceD0Std
         self.d0Distribution = d0Distribution
@@ -177,7 +178,7 @@ class ChiralActiveMatterNonreciprocalReact(ChiralActiveMatter):
         elif d0Distribution == "normal":
             self.distanceD0 = np.abs(np.random.normal(loc=distanceD0Mean, scale=distanceD0Std, size=agentsNum))
         elif d0Distribution == "lorentzian":
-            self.distanceD0 = np.abs(np.random.standard_cauchy(size=agentsNum) * distanceD0Std + 3)
+            self.distanceD0 = np.abs(np.random.standard_cauchy(size=agentsNum) * distanceD0Std + 3)  #半宽
 
         singleOmegaDistributionSize = agentsNum if chiralNum == 1 else agentsNum // 2
         if omegaDistribution == "uniform":
@@ -198,6 +199,15 @@ class ChiralActiveMatterNonreciprocalReact(ChiralActiveMatter):
             if fig is None:
                 fig, axs = plt.subplots(1, 2, gridspec_kw={'width_ratios': [1, 1]}, figsize=(12, 5))
                 ax1, ax2 = axs
+                fig.text(0.05, 0.95, 
+                    f'Singlechiral   '
+                    f'λ: {self.strengthLambda:.2f}   '
+                    f'd0~U   '
+                    f'Mean: {self.distanceD0Mean:.2f}   '
+                    f'Length: {self.distanceD0Std:.2f}   '
+                    f'ω~U(1,3)',
+                    ha='left', va='top',  # 水平靠左对齐，垂直靠顶部对齐
+                    fontsize=10)
             else:
                 ax1, ax2 = axs[0], axs[1]
             colors = [cmap(i) for i in (self.distanceD0 - self.distanceD0Mean) / self.distanceD0Std + 0.5]
@@ -212,6 +222,15 @@ class ChiralActiveMatterNonreciprocalReact(ChiralActiveMatter):
             if fig is None:
                 fig, axs = plt.subplots(1, 2, gridspec_kw={'width_ratios': [5, 6]}, figsize=(11, 5))
                 ax1, ax2 = axs
+                fig.text(0.05, 0.95, 
+                    f'Singlechiral   '
+                    f'λ: {self.strengthLambda:.2f}   '
+                    f'd0~U   '
+                    f'Mean: {self.distanceD0Mean:.2f}   '
+                    f'Length: {self.distanceD0Std:.2f}   '
+                    f'ω~U(1,3)',
+                    ha='left', va='top',  # 水平靠左对齐，垂直靠顶部对齐
+                    fontsize=10)
             else:
                 ax1, ax2 = axs[0], axs[1]
             colors = [cmap(0) for _ in range(self.omegaTheta.size)]
@@ -264,7 +283,10 @@ class ChiralActiveMatterNonreciprocalReact(ChiralActiveMatter):
         ax2.set_xlim(0, 10)
         ax2.set_ylim(0, 10)
 
-        plt.tight_layout()
+        plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+
+        # plt.savefig(f"./mp4/{model}.mp4", dpi=100)
+        # plt.close(fig)
 
     def __str__(self) -> str:
         
@@ -582,7 +604,7 @@ class StateAnalysis:
     
     def phase_agg_op(self):
         theta = self.totalPhaseTheta[self.lookIndex]
-        return self._clac_phase_sync_op(self, theta)
+        return self._clac_phase_sync_op(theta)
     
     @staticmethod
     @nb.njit
@@ -1170,6 +1192,17 @@ def draw_mp4(model: ChiralActiveMatterNonreciprocalReact):
         model.phaseTheta = phaseTheta
         model.plot(fig=fig, axs=[ax1, ax2])
 
+        text_content = (
+            f'Singlechiral   '
+            f'λ: {model.strengthLambda:.2f}   '
+            f'd0~U   '
+            f'Mean: {model.distanceD0Mean:.2f}   '
+            f'Length: {model.distanceD0Std:.2f}   '
+            f'ω~U(1,3)'
+        )
+
+        fig.text(0.5, 0.95, text_content, ha='center', va='center', fontsize=10, color='black')
+
         hist, bins = np.histogram(phaseTheta[class1], bins=100, range=(-np.pi, np.pi))
 
         ax3.plot_surface(
@@ -1195,7 +1228,7 @@ def draw_mp4(model: ChiralActiveMatterNonreciprocalReact):
     
     ani = ma.FuncAnimation(fig, plot_frame, frames=np.arange(0, mp4TNum, 1), interval=50, repeat=False)
 
-    ani.save(f"./mp4/{model}.mp4", dpi=250, writer="ffmpeg")
+    ani.save(f"./mp4/{model}.mp4", dpi=100, writer="ffmpeg")
 
     plt.close()
 
@@ -1219,6 +1252,13 @@ def plot_last(model: ChiralActiveMatterNonreciprocalReact):
     model.positionX = positionX
     model.phaseTheta = phaseTheta
 
-    model.plot()
+    # fig, axs = plt.subplots(1, 2, gridspec_kw={'width_ratios': [1, 1]}, figsize=(12, 5))
+    # ax1, ax2 = axs
 
-    plt.show()
+    # fig = plt.figure()
+
+    # model.plot(fig=fig, axs=[ax1, ax2])
+    model.plot()
+    plt.savefig(f"./png/{model}.png", dpi=150)
+    plt.close()
+    # plt.show()
