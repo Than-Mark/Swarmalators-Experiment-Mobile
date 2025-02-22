@@ -54,33 +54,42 @@ MP4_PATH = r"E:\MS_ExperimentData\mp4"
 MP4_TEMP_PATH = r"E:\MS_ExperimentData\mp4_temp"
 
 
-def draw_frame(sa: StateAnalysis, idx: int):
-    fig = plt.figure(figsize=(13.5, 4))
-    ax1 = fig.add_subplot(131)
-    sa.plot_spatial(ax=ax1, index=idx)
-    ax2 = fig.add_subplot(132)
-    im = ax2.pcolor(sa.totalC1[idx].T, cmap=cmap, vmin=0, vmax=sa.maxC1)
-    plt.colorbar(im, ax=ax2, cmap=cmap)
-    ax3 = fig.add_subplot(133)
-    im = ax3.pcolor(sa.totalC2[idx].T, cmap=cmap, vmin=0, vmax=sa.maxC2)
-    plt.colorbar(im, ax=ax3, cmap=cmap)
-    ax1.set_aspect("equal")
+def draw_frame(sa: StateAnalysis):
+    idx = sa.index
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5), gridspec_kw={"width_ratios": [5, 8.5]})
+    sa.plot_spatial(ax=ax1, index=-1)
+    sa.plot_fields(ax=ax2, index=-1, fixExtremum=False)
     plt.tight_layout()
     plt.savefig(os.path.join(MP4_TEMP_PATH, f"{idx}.png"))
     plt.close(fig)
 
 
+k23 = 0.4
 model = ChemotacticLotkaVolterra(
-    k1=0.19, k2=0.4, k3=0.4, k4=0.28,
-    boundaryLength=10, speedV=0.1, 
+    k1=0.01, k2=k23, k3=k23, k4=0.01,
+    boundaryLength=20, speedV=0.0, 
     diameter=0.3, repelPower=1,
-    cellNumInLine=100, agentsNum=200,
+    omega1=0, omega2=0, filedDrive=False,
+    cellNumInLine=200, agentsNum=1000,
     chemoAlpha1=-10, chemoAlpha2=-10,
     diffusionRateD1=0.01, diffusionRateD2=0.01,
-    dt=0.1, shotsnaps=5,
+    dt=0.1, shotsnaps=20,
     tqdm=True, savePath=SAVE_PATH, overWrite=True
 )
 sa = StateAnalysis(model)
+subSaList = list()
+for i in tqdm(range(0, sa.TNum), desc="Processing data"):
+    subSa = StateAnalysis()
+    subSa.totalPositionX = [sa.totalPositionX[i]]
+    subSa.totalPhaseTheta = [sa.totalPhaseTheta[i]]
+    subSa.totalDotPos = [sa.totalDotPos[i]]
+    subSa.totalC1 = [sa.totalC1[i]]
+    subSa.totalC2 = [sa.totalC2[i]]
+    subSa.model = sa.model
+    subSa.index = i
+    subSa.maxC1, subSa.maxC2 = sa.maxC1, sa.maxC2
+    subSa.minC1, subSa.minC2 = sa.minC1, sa.minC2
+    subSaList.append(subSa)
 
 if __name__ == "__main__":
 
@@ -88,11 +97,10 @@ if __name__ == "__main__":
         shutil.rmtree(MP4_TEMP_PATH)
     os.mkdir(MP4_TEMP_PATH)
     
-    draw_frame_with_sa = partial(draw_frame, sa)
     with Pool(10) as p:
         p.map(
-            draw_frame_with_sa,
-            tqdm(range(0, sa.TNum), desc="Drawing frames", total=sa.TNum),
+            draw_frame,
+            tqdm(subSaList, desc="Drawing frames", total=sa.TNum),
         )
     
     if os.path.exists(MP4_PATH + rf"\{model}.mp4"):
@@ -104,7 +112,7 @@ if __name__ == "__main__":
         '-i', os.path.join(MP4_TEMP_PATH, "%d.png"),
         '-c:v', 'libx264',
         '-pix_fmt', 'yuv420p',
-        rf"{MP4_PATH}\{model}.mp4"
+        rf"{MP4_PATH}/{model}.mp4"
     ]
 
     subprocess.run(ffmpeg_command)

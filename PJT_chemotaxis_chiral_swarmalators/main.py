@@ -537,6 +537,7 @@ class ChemotacticLotkaVolterra(PatternFormation):
     def __init__(self, k1: float, k2: float, k3: float, k4: float,
                  boundaryLength: float = 10, speedV: float = 3, 
                  diameter: float = 0.1, repelPower: float = 1,
+                 omega1: float = 0, omega2: float = 0, filedDrive: bool = False,
                  chemoAlpha1: float = 1, chemoAlpha2: float = 1,
                  diffusionRateD1: float = 1, diffusionRateD2: float = 1,
                  cellNumInLine: int = 50, agentsNum: int=1000, dt: float=0.01,
@@ -556,6 +557,9 @@ class ChemotacticLotkaVolterra(PatternFormation):
         self.k2 = k2
         self.k3 = k3
         self.k4 = k4
+        self.omega1 = omega1
+        self.omega2 = omega2
+        self.filedDrive = filedDrive
         self.diffusionRateD1 = diffusionRateD1
         self.diffusionRateD2 = diffusionRateD2
         self.dt = dt
@@ -572,6 +576,9 @@ class ChemotacticLotkaVolterra(PatternFormation):
         self.chemoAlpha2Mat = chemoAlpha2 * np.concatenate([
             np.zeros(self.halfAgentsNum), np.ones(self.halfAgentsNum)
         ]).reshape(-1, 1)
+        self.omegaValue = np.concatenate([
+            np.ones(self.halfAgentsNum) * omega1, np.ones(self.halfAgentsNum) * omega2
+        ])
         self.chemoAlpha1 = chemoAlpha1
         self.chemoAlpha2 = chemoAlpha2
         self.diameter = diameter
@@ -591,6 +598,7 @@ class ChemotacticLotkaVolterra(PatternFormation):
         self.temp["direction"] = self._direction(self.phaseTheta)
         self.temp["ocsiIdx"] = (self.positionX / self.dx).round().astype(int)
         self.temp["dotTheta"] = self.dotTheta
+        self.temp["dotPosition"] = self.dotPosition
         self.temp["dotC1"] = self.dotC1
         self.temp["dotC2"] = self.dotC2
 
@@ -598,20 +606,15 @@ class ChemotacticLotkaVolterra(PatternFormation):
         if ax is None:
             _, ax = plt.subplots(figsize=(5, 5))
         ax.scatter(
-            self.positionX[:self.agentsNum // 2, 0], self.positionX[:self.agentsNum // 2, 1],
-            color="#F8B08E", s=100 * self.diameter / 0.1 * (2.5 / self.boundaryLength) # edgecolors="black"
+            self.positionX[:, 0], self.positionX[:, 1],
+            color=["#F8B08E"] * self.halfAgentsNum + ["#9BD5D5"] * self.halfAgentsNum,
+            s=100 * self.diameter / 0.1 * (2.5 / self.boundaryLength)
         )
-        ax.scatter(
-            self.positionX[self.agentsNum // 2:, 0], self.positionX[self.agentsNum // 2:, 1],
-            color="#9BD5D5", s=100 * self.diameter / 0.1 * (2.5 / self.boundaryLength)  # edgecolors="black"
-        )
+        unitDir = self.temp["dotPosition"] / np.linalg.norm(self.temp["dotPosition"], axis=1)[:, None]
         ax.quiver(
-            self.positionX[:self.agentsNum // 2, 0], self.positionX[:self.agentsNum // 2, 1],
-            np.cos(self.phaseTheta[:self.agentsNum // 2]), np.sin(self.phaseTheta[:self.agentsNum // 2]), color="#F16623"
-        )
-        ax.quiver(
-            self.positionX[self.agentsNum // 2:, 0], self.positionX[self.agentsNum // 2:, 1],
-            np.cos(self.phaseTheta[self.agentsNum // 2:]), np.sin(self.phaseTheta[self.agentsNum // 2:]), color="#49B2B2"
+            self.positionX[:, 0], self.positionX[:, 1], unitDir[:, 0], unitDir[:, 1],
+            color=["#F16623"] * self.halfAgentsNum + ["#49B2B2"] * self.halfAgentsNum,
+            width=0.004, scale=40
         )
         ax.set_xlim(0, self.boundaryLength)
         ax.set_ylim(0, self.boundaryLength)
@@ -679,17 +682,11 @@ class ChemotacticLotkaVolterra(PatternFormation):
     def chemotactic(self):
         localGradC1 = self.nablaC1[self.temp["ocsiIdx"][:, 0], self.temp["ocsiIdx"][:, 1]]
         localGradC2 = self.nablaC2[self.temp["ocsiIdx"][:, 0], self.temp["ocsiIdx"][:, 1]]
-        # return (
-        #     self.chemoAlpha1Mat * 
-        #     (localGradC1[:, 1] * self.temp["direction"][:, 0] - localGradC1[:, 0] * self.temp["direction"][:, 1]) +
-        #     self.chemoAlpha2Mat *
-        #     (localGradC2[:, 1] * self.temp["direction"][:, 0] - localGradC2[:, 0] * self.temp["direction"][:, 1])
-        # )
         phiC1 = np.arctan2(localGradC1[:, 1], localGradC1[:, 0])
         phiC2 = np.arctan2(localGradC2[:, 1], localGradC2[:, 0])
         return (
-            self.chemoAlpha1Mat * np.linalg.norm(localGradC1, axis=1) * np.sin(phiC1 - self.phaseTheta) + 
-            self.chemoAlpha2Mat * np.linalg.norm(localGradC2, axis=1) * np.sin(phiC2 - self.phaseTheta)
+            self.chemoAlpha1 * np.linalg.norm(localGradC1, axis=1) * np.sin(phiC1 - self.phaseTheta) + 
+            self.chemoAlpha2 * np.linalg.norm(localGradC2, axis=1) * np.sin(phiC2 - self.phaseTheta)
         )
 
     @property
@@ -726,40 +723,41 @@ class ChemotacticLotkaVolterra(PatternFormation):
     
     @property
     def dotC1(self):
-        return self.productC1 + self.diffusionC1  # - self.decayRateKd1 * self.c1
+        return self.productC1 + self.diffusionC1
     
     @property
     def dotC2(self):
-        return self.productC2 + self.diffusionC2  # - self.decayRateKd2 * self.c2
+        return self.productC2 + self.diffusionC2
     
     @property
     def dotTheta(self):
-        return self.phaseTheta * 0  # self.chemotactic
-        # return self._dotTheta(self.phaseTheta, self.chemotactic, 
-        #                       0, 0)
+        if self.filedDrive:
+            return self.omegaValue + self.chemotactic
+        else:
+            return self.omegaValue
 
     @staticmethod
     @nb.njit
     def _dotTheta(phaseTheta: np.ndarray, 
                   chemotactic: np.ndarray, strengthLambda: float, 
                   A: np.ndarray):
-        # adjMatrixTheta = (
-        #     np.repeat(phaseTheta, phaseTheta.shape[0])
-        #     .reshape(phaseTheta.shape[0], phaseTheta.shape[0])
-        # )
         return chemotactic
-        # + strengthLambda * np.sum(A * np.sin(
-        #     adjMatrixTheta - phaseTheta
-        # ), axis=0)
+
+    @property
+    def dotPosition(self):
+        if self.filedDrive:
+            return self.speedV * self._direction(self.phaseTheta) + self.shortRepulsion
+        else:
+            return self.speedV * self._direction(self.phaseTheta) + self.shortRepulsion + self.localGradient
 
     def update(self):
         self.temp["ocsiIdx"] = (self.positionX / self.dx).round().astype(int)
         self.temp["dotTheta"] = self.dotTheta
         self.temp["dotC1"] = self.dotC1
         self.temp["dotC2"] = self.dotC2
-        self.temp["direction"] = self.localGradient  # self._direction(self.phaseTheta)
+        self.temp["dotPosition"] = self.dotPosition
         self.positionX = np.mod(
-            self.positionX + (self.speedV * self.temp["direction"] + self.shortRepulsion) * self.dt, 
+            self.positionX + self.temp["dotPosition"] * self.dt, 
             self.boundaryLength
         )
         self.phaseTheta += self.temp["dotTheta"] * self.dt
@@ -769,21 +767,57 @@ class ChemotacticLotkaVolterra(PatternFormation):
         self.c1[self.c1 < 0] = 0
         self.c2[self.c2 < 0] = 0
     
+    def init_store(self):
+        if self.savePath is None:
+            self.store = None
+        else:
+            if os.path.exists(f"{self.savePath}/{self}.parquet"):
+                if self.overWrite:
+                    os.remove(f"{self.savePath}/{self}.parquet")
+                else:
+                    print(f"{self.savePath}/{self}.parquet already exists")
+                    return False
+            self.store = f"{self.savePath}/{self}"
+            if os.path.exists(self.store):
+                shutil.rmtree(self.store)
+            os.makedirs(self.store)
+            
+        self.append()
+        return True
+
     def append(self):
-        if self.store is not None:
-            if self.counts % self.shotsnaps != 0:
-                return
-            self.store.append(key="positionX", value=pd.DataFrame(self.positionX))
-            self.store.append(key="phaseTheta", value=pd.DataFrame(self.phaseTheta))
-            self.store.append(key="dotTheta", value=pd.DataFrame(self.temp["dotTheta"]))
-            self.store.append(key="c1", value=pd.DataFrame(self.c1))
-            self.store.append(key="c2", value=pd.DataFrame(self.c2))
+        if (self.store is None) or (self.counts % self.shotsnaps != 0):
+            return
+        pd.DataFrame(self.positionX, columns=["x", "y"]).to_parquet(f"{self.store}/positionX_{self.counts}.parquet")
+        pd.DataFrame(self.phaseTheta, columns=["theta"]).to_parquet(f"{self.store}/phaseTheta_{self.counts}.parquet")
+        pd.DataFrame(self.temp["dotTheta"], columns=["dTheta"]).to_parquet(f"{self.store}/dotTheta_{self.counts}.parquet")
+        pd.DataFrame(self.temp["dotPosition"], columns=["dx", "dy"]).to_parquet(f"{self.store}/dotPosition_{self.counts}.parquet")
+        pd.DataFrame(self.c1, columns=np.arange(self.cellNumInLine).astype(str)).to_parquet(f"{self.store}/c1_{self.counts}.parquet")
+        pd.DataFrame(self.c2, columns=np.arange(self.cellNumInLine).astype(str)).to_parquet(f"{self.store}/c2_{self.counts}.parquet")
+        # self.store.append(key="positionX", value=pd.DataFrame(self.positionX))
+        # self.store.append(key="phaseTheta", value=pd.DataFrame(self.phaseTheta))
+        # self.store.append(key="dotTheta", value=pd.DataFrame(self.temp["dotTheta"]))
+        # self.store.append(key="dotPosition", value=pd.DataFrame(self.temp["dotPosition"]))
+        # self.store.append(key="c1", value=pd.DataFrame(self.c1))
+        # self.store.append(key="c2", value=pd.DataFrame(self.c2))
+
+    def close(self):
+        if self.store is None:
+            return
+        for key in ["positionX", "phaseTheta", "dotTheta", "dotPosition", "c1", "c2"]:
+            pd.concat([
+                pd.read_parquet(f"{self.store}/{key}_{i}.parquet") 
+                for i in range(0, self.counts, self.shotsnaps)
+            ]).to_hdf(f"{self.store}.h5", key=key)
+        shutil.rmtree(self.store)
+        self.store = None
 
     def __str__(self) -> str:
                 
         name =  (
             f"CLV_K1{self.k1:.3f}_K2{self.k2:.3f}_K3{self.k3:.3f}_K4{self.k4:.3f}"
             f"_a1{self.chemoAlpha1:.1f}_a2{self.chemoAlpha2:.1f}"
+            f"_o1{self.omega1:.1f}_o2{self.omega2:.1f}_{'filedDrive' if self.filedDrive else 'noDrive'}"
             f"_D1{self.diffusionRateD1:.3f}_D2{self.diffusionRateD2:.3f}"
             f"_sV{self.speedV:.1f}_d{self.diameter:.1f}_rP{self.repelPower:.1f}"
             f"_bL{self.boundaryLength:.1f}_dt{self.dt:.2f}_cN{self.cellNumInLine}"
@@ -806,7 +840,8 @@ class StateAnalysis:
             targetPath = f"{self.model.savePath}/{self.model}.h5"
             totalPositionX = pd.read_hdf(targetPath, key="positionX")
             totalPhaseTheta = pd.read_hdf(targetPath, key="phaseTheta")
-            totalDotTheta = pd.read_hdf(targetPath, key="dotTheta")
+            # totalDotTheta = pd.read_hdf(targetPath, key="dotTheta")
+            totalDotPos = pd.read_hdf(targetPath, key="dotPosition")
             totalC1 = pd.read_hdf(targetPath, key="c1")
             totalC2 = pd.read_hdf(targetPath, key="c2")
             
@@ -814,23 +849,36 @@ class StateAnalysis:
             self.TNum = TNum
             self.totalPositionX = totalPositionX.values.reshape(TNum, self.model.agentsNum, 2)
             self.totalPhaseTheta = totalPhaseTheta.values.reshape(TNum, self.model.agentsNum)
-            self.totalDotTheta = totalDotTheta.values.reshape(TNum, self.model.agentsNum)
+            # self.totalDotTheta = totalDotTheta.values.reshape(TNum, self.model.agentsNum)
+            self.totalDotPos = totalDotPos.values.reshape(TNum, self.model.agentsNum, 2)
             self.totalC1 = totalC1.values.reshape(TNum, model.cellNumInLine, model.cellNumInLine)
             self.totalC2 = totalC2.values.reshape(TNum, model.cellNumInLine, model.cellNumInLine)
             self.maxC1 = totalC1.values.max()
             self.maxC2 = totalC2.values.max()
+            self.minC1 = totalC1.values.min()
+            self.minC2 = totalC2.values.min()
 
             if self.showTqdm:
                 self.iterObject = tqdm(range(1, self.totalPhaseTheta.shape[0]))
             else:
                 self.iterObject = range(1, self.totalPhaseTheta.shape[0])
 
+        colors = [(1, 1, 1, 0), (0.95, 0.4 , 0.14, 0.9)]
+        cmap1 = mcolors.LinearSegmentedColormap.from_list("my_colormap", colors)
+        cmap1.set_bad(color=(1, 1, 1, 0))
+        self.c1Maps = cmap1
+        colors = [(1, 1, 1, 0), (0.29, 0.7, 0.7, 0.9)]
+        cmap2 = mcolors.LinearSegmentedColormap.from_list("my_colormap", colors)
+        cmap2.set_bad(color=(1, 1, 1, 0))
+        self.c2Maps = cmap2
+
     def get_state(self, index: int = -1):
         positionX = self.totalPositionX[index]
         phaseTheta = self.totalPhaseTheta[index]
-        dotTheta = self.totalDotTheta[index]
+        # dotTheta = self.totalDotTheta[index]
+        dotPos = self.totalDotPos[index]
 
-        return positionX, phaseTheta, dotTheta
+        return positionX, phaseTheta, dotPos
 
     @staticmethod
     @nb.njit
@@ -933,7 +981,7 @@ class StateAnalysis:
         return {i + 1: classes[i] for i in range(len(classes))}, centers
 
     def plot_spatial(self, ax: plt.Axes = None, oscis: np.ndarray = None, index: int = -1, **kwargs):
-        positionX, phaseTheta, _ = self.get_state(index)
+        positionX, _, dotPos = self.get_state(index)
 
         if ax is None:
             fig, ax = plt.subplots(figsize=(6, 6))
@@ -945,15 +993,39 @@ class StateAnalysis:
             color=["#F8B08E"] * self.model.halfAgentsNum + ["#9BD5D5"] * self.model.halfAgentsNum,
             **kwargs
         )
+        unitDir = dotPos / np.linalg.norm(dotPos, axis=1)[:, None]
         ax.quiver(
             positionX[oscis, 0], positionX[oscis, 1],
-            np.cos(phaseTheta[oscis]), np.sin(phaseTheta[oscis]), 
+            unitDir[oscis, 0], unitDir[oscis, 1], 
             color=["#F16623"] * self.model.halfAgentsNum + ["#49B2B2"] * self.model.halfAgentsNum, 
-            width=0.006, scale=18,
+            width=0.004, scale=40,
             **kwargs
         )
         ax.set_xlim(0, self.model.boundaryLength)
-        ax.set_ylim(0, self.model.boundaryLength)    
+        ax.set_ylim(0, self.model.boundaryLength)
+
+    def plot_fields(self, ax: plt.Axes = None, index: int = -1, fixExtremum: bool = False):
+        if ax is None:
+            _, ax = plt.subplots(1, 1, figsize=(5, 7))
+        c1: np.ndarray = self.totalC1[index]
+        c2: np.ndarray = self.totalC2[index]
+        if fixExtremum:
+            vmaxC1, vmaxC2, vminC1, vminC2 = self.maxC1, self.maxC2, self.minC1, self.minC2
+        else:
+            vmaxC1 = vmaxC2 = vminC1 = vminC2 = None
+
+        if c1.mean() > c2.mean():
+            pc1 = ax.imshow(self.totalC1[index].T, cmap=self.c1Maps, vmax=vmaxC1, vmin=vminC1)
+            plt.colorbar(pc1)
+            pc2 = ax.imshow(self.totalC2[index].T, cmap=self.c2Maps, vmax=vmaxC2, vmin=vminC2)
+            plt.colorbar(pc2)
+        else:
+            pc2 = ax.imshow(self.totalC2[index].T, cmap=self.c2Maps, vmax=vmaxC2, vmin=vminC2)
+            plt.colorbar(pc2)
+            pc1 = ax.imshow(self.totalC1[index].T, cmap=self.c1Maps, vmax=vmaxC1, vmin=vminC1)
+            plt.colorbar(pc1)
+        plt.xlim(0, self.model.cellNumInLine)
+        plt.ylim(0, self.model.cellNumInLine)
 
     def plot_centers(self, ax: plt.Axes = None, index: int = -1):
         positionX, phaseTheta, _ = self.get_state(index)
