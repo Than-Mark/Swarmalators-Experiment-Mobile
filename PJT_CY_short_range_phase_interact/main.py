@@ -55,8 +55,8 @@ class ShortRangePhaseInter(Swarmalators2D):
         self.J = J
         self.d0 = d0
         self.one = np.ones((agentsNum, agentsNum))
-        self.randomSeed = randomSeed
-
+        self.temp["pointX"] = np.zeros((agentsNum, 2))
+    
     @property
     def Fatt(self) -> np.ndarray:
         """
@@ -106,7 +106,15 @@ class ShortRangePhaseInter(Swarmalators2D):
 
     def update(self) -> None:
         self.update_temp()
-        self.positionX, self.phaseTheta = self._update(
+        # self.positionX, self.phaseTheta = self._update(
+        #     self.positionX, self.phaseTheta,
+        #     self.velocity, self.omega,
+        #     self.Iatt, self.Irep,
+        #     self.Fatt, self.Frep,
+        #     self.H, self.A,
+        #     self.K, self.dt
+        # )
+        pointX, pointTheta = self._update(
             self.positionX, self.phaseTheta,
             self.velocity, self.omega,
             self.Iatt, self.Irep,
@@ -114,6 +122,9 @@ class ShortRangePhaseInter(Swarmalators2D):
             self.H, self.A,
             self.K, self.dt
         )
+        self.temp["pointX"] = pointX
+        self.positionX += pointX * self.dt
+        self.phaseTheta = np.mod(self.phaseTheta + pointTheta * self.dt, 2 * np.pi)
         self.counts += 1
 
     @staticmethod
@@ -131,14 +142,24 @@ class ShortRangePhaseInter(Swarmalators2D):
             Iatt * Fatt.reshape((dim, dim, 1)) - Irep * Frep.reshape((dim, dim, 1)),
             axis=1
         ) / dim
-        positionX += pointX * dt
+        # positionX += pointX * dt
         pointTheta = omega + K / np.sum(A, axis=1) * np.sum(A * H, axis=1)
-        phaseTheta = np.mod(phaseTheta + pointTheta * dt, 2 * np.pi)
-        return positionX, phaseTheta
+        # phaseTheta = np.mod(phaseTheta + pointTheta * dt, 2 * np.pi)
+        # return positionX, phaseTheta
+        return pointX, pointTheta
+
+    def append(self):
+        if self.store is not None:
+            if self.counts % self.shotsnaps != 0:
+                return
+            self.store.append(key="positionX", value=pd.DataFrame(self.positionX))
+            self.store.append(key="phaseTheta", value=pd.DataFrame(self.phaseTheta))
+            self.store.append(key="pointX", value=pd.DataFrame(self.temp["pointX"]))
 
     def plot(self, ax: plt.Axes = None) -> None:
         if ax is None:
             fig, ax = plt.subplots(figsize=(6, 5))
+
 
         sc = ax.scatter(self.positionX[:, 0], self.positionX[:, 1],
                     c=self.phaseTheta, cmap=new_cmap, alpha=0.8, vmin=0, vmax=2*np.pi)
@@ -146,10 +167,10 @@ class ShortRangePhaseInter(Swarmalators2D):
         cbar = plt.colorbar(sc, ticks=[0, np.pi, 2*np.pi], ax=ax)
         cbar.ax.set_ylim(0, 2*np.pi)
         cbar.ax.set_yticklabels(['$0$', '$\pi$', '$2\pi$'])
-        ax.set_title(rf"$J={self.J:.1f},\ K={self.K:.1f},\ d_0={self.d0}$")
+        ax.set_title(rf"$J={self.J:.2f},\ K={self.K:.2f},\ d_0={self.d0}$")
 
     def __str__(self) -> str:
-        return f"ShortRangePhaseInter_a{self.agentsNum}_K{self.K:.1f}_J{self.J:.1f}_d0{self.d0:.1f}"
+        return f"ShortRangePhaseInter_a{self.agentsNum}_K{self.K:.2f}_J{self.J:.2f}_d0{self.d0:.2f}"
     
 
 class StateAnalysis:
@@ -162,20 +183,12 @@ class StateAnalysis:
             targetPath = f"{self.model.savePath}/{self.model}.h5"
             totalPositionX = pd.read_hdf(targetPath, key="positionX")
             totalPhaseTheta = pd.read_hdf(targetPath, key="phaseTheta")
-            totalPointX = pd.read_hdf(targetPath, key="pointX")
-            totalPointTheta = pd.read_hdf(targetPath, key="pointTheta")
-            totalDrivePosAndPhs = pd.read_hdf(targetPath, key="drivePosAndPhs")
             
             TNum = totalPositionX.shape[0] // self.model.agentsNum
             self.TNum = TNum
             self.tRange = np.arange(0, (TNum - 1) * model.shotsnaps, model.shotsnaps) * self.model.dt
             self.totalPositionX = totalPositionX.values.reshape(TNum, self.model.agentsNum, 2)
             self.totalPhaseTheta = totalPhaseTheta.values.reshape(TNum, self.model.agentsNum)
-            self.totalPointX = totalPointX.values.reshape(TNum, self.model.agentsNum, 2)
-            self.totalPointTheta = totalPointTheta.values.reshape(TNum, self.model.agentsNum)
-            totalDrivePosAndPhs = totalDrivePosAndPhs.values.reshape(TNum, 3)
-            self.totalDrivePosition = totalDrivePosAndPhs[:, :2]
-            self.totalDrivePhaseTheta = totalDrivePosAndPhs[:, 2]
 
             if self.showTqdm:
                 self.iterObject = tqdm(range(1, self.totalPhaseTheta.shape[0]))
@@ -183,7 +196,7 @@ class StateAnalysis:
                 self.iterObject = range(1, self.totalPhaseTheta.shape[0])
 
     def get_state(self, index: int = -1):
-        return self.totalPositionX[index], self.totalPhaseTheta[index], self.totalDrivePosition[index], self.totalDrivePhaseTheta[index]
+        return self.totalPositionX[index], self.totalPhaseTheta[index]
 
     @staticmethod
     def calc_order_parameter_R(model: ShortRangePhaseInter) -> float:
@@ -208,35 +221,22 @@ class StateAnalysis:
         Ntr = np.abs(pointTheta - model.driveThateVelocityOmega) < 0.2 / model.dt * 0.1
         return Ntr.sum() / model.agentsNum
     
-    def plot_last_state(self, model: ShortRangePhaseInter = None, ax: plt.Axes = None, withColorBar: bool =True, withDriver: bool = False,
-                        s: float = 50, driveS: float = 100) -> None:
+    def plot_last_state(self, model: ShortRangePhaseInter = None, ax: plt.Axes = None, withColorBar: bool =True, 
+                        s: float = 50) -> None:
         if ax is None:
             fig, ax = plt.subplots(figsize=(5, 4))
 
         if model is not None:
             t = model.counts * model.dt
-            if withDriver:
-                drivePosition = np.array([
-                    np.cos(model.driveThateVelocityOmega * t) * model.druveRadiusR,
-                    np.sin(model.driveThateVelocityOmega * t) * model.druveRadiusR
-                ])
-                ax.scatter(drivePosition[0], drivePosition[1], color="white", s=driveS, marker='o', edgecolors='k', zorder=10)
-                driveCircle = plt.Circle((0, 0), model.druveRadiusR, color='black', fill=False, lw=2, linestyle='--')
-                ax.add_artist(driveCircle)
             sc = ax.scatter(model.positionX[:, 0], model.positionX[:, 1], s=s,
                             c=model.phaseTheta, cmap=new_cmap, alpha=0.8, vmin=0, vmax=2*np.pi)
             maxPos = np.abs(model.positionX).max()
-            ax.set_title(rf"$J={model.J:.1f},\ K={model.K:.1f},\ d_0={model.d0}$")
+            ax.set_title(rf"$J={model.J:.2f},\ K={model.K:.2f},\ d_0={model.d0}$")
         else:
-            if withDriver:
-                ax.scatter(self.totalDrivePosition[self.lookIndex, 0], self.totalDrivePosition[self.lookIndex, 1], 
-                           color="white", s=driveS, marker='o', edgecolors='k', zorder=10)
-                driveCircle = plt.Circle((0, 0), self.model.druveRadiusR, color='black', fill=False, lw=2, linestyle='--')
-                ax.add_artist(driveCircle)
             sc = ax.scatter(self.totalPositionX[self.lookIndex, :, 0], self.totalPositionX[self.lookIndex, :, 1], s=s,
                             c=self.totalPhaseTheta[self.lookIndex], cmap=new_cmap, alpha=0.8, vmin=0, vmax=2*np.pi)
             maxPos = np.abs(self.totalPositionX[self.lookIndex]).max()
-            ax.set_title(rf"$J={self.model.J:.1f},\ K={self.model.K:.1f},\ d_0={self.model.d0}$")
+            ax.set_title(rf"$J={self.model.J:.2f},\ K={self.model.K:.2f},\ d_0={self.model.d0}$")
 
         if maxPos < 1:
             ax.set_xlim(-1, 1)
@@ -255,6 +255,65 @@ class StateAnalysis:
             cbar = plt.colorbar(sc, ticks=[0, np.pi, 2*np.pi], ax=ax)
             cbar.ax.set_ylim(0, 2*np.pi)
             cbar.ax.set_yticklabels(['$0$', '$\pi$', '$2\pi$'])
+
+
+
+        
+    
+    def plot_state_at_step(self, model: ShortRangePhaseInter = None, ax: plt.Axes = None, withColorBar: bool =True, 
+                           step: int = 9000, s: float = 50) -> None:
+        """
+        绘制指定时间步 (step) 的模型状态，如果没有传递 step，则绘制最后一步的状态
+        :param model: ShortRangePhaseInter 模型
+        :param ax: matplotlib 的坐标轴对象
+        :param step: 要绘制的时间步，如果为 None,则绘制最后一步
+        :param withColorBar: 是否显示颜色条
+        :param s: 点的大小
+        """
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(5, 4))
+
+        if model is not None:
+            t = model.counts * model.dt
+            sc = ax.scatter(model.positionX[:, 0], model.positionX[:, 1], s=s,
+                            c=model.phaseTheta, cmap=new_cmap, alpha=0.8, vmin=0, vmax=2*np.pi)
+            maxPos = np.abs(model.positionX).max()
+            ax.set_title(rf"$J={model.J:.2f},\ K={model.K:.2f},\ d_0={model.d0}$")
+        else:
+            sc = ax.scatter(self.totalPositionX[step, :, 0], self.totalPositionX[step, :, 1], 
+                            s=s, c=self.totalPhaseTheta[step], cmap=new_cmap, alpha=0.8, vmin=0, vmax=2*np.pi)
+            maxPos = np.abs(self.totalPositionX[step]).max()
+            ax.set_title(rf"$J={self.model.J:.2f},\ K={self.model.K:.2f},\ d_0={self.model.d0}$")
+        
+
+        if maxPos < 1:
+            ax.set_xlim(-1, 1)
+            ax.set_ylim(-1, 1)
+            ax.set_xticks([-1, -0.5, 0, 0.5, 1])
+            ax.set_yticks([-1, -0.5, 0, 0.5, 1])
+        else:
+            bound = maxPos * 1.05
+            roundBound = np.round(bound)
+            ax.set_xlim(-bound, bound)
+            ax.set_ylim(-bound, bound)
+            ax.set_xticks([-roundBound, -roundBound / 2, 0, roundBound / 2, roundBound])
+            ax.set_yticks([-roundBound, -roundBound / 2, 0, roundBound / 2, roundBound])
+        
+        if withColorBar:
+            cbar = plt.colorbar(sc, ticks=[0, np.pi, 2*np.pi], ax=ax)
+            cbar.ax.set_ylim(0, 2*np.pi)
+            cbar.ax.set_yticklabels(['$0$', '$\pi$', '$2\pi$'])
+
+        
+        
+
+        
+        
+        
+
+
+
+
 
 def draw_mp4(model: ShortRangePhaseInter, savePath: str = "./data", mp4Path: str = "./mp4", step: int = 1, earlyStop: int = None):
 
