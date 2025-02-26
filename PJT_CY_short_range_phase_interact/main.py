@@ -56,6 +56,7 @@ class ShortRangePhaseInter(Swarmalators2D):
         self.d0 = d0
         self.one = np.ones((agentsNum, agentsNum))
         self.temp["pointX"] = np.zeros((agentsNum, 2))
+        self.temp["pointTheta"] = np.zeros(agentsNum)
     
     @property
     def Fatt(self) -> np.ndarray:
@@ -123,6 +124,7 @@ class ShortRangePhaseInter(Swarmalators2D):
             self.K, self.dt
         )
         self.temp["pointX"] = pointX
+        self.temp["pointTheta"] = pointTheta
         self.positionX += pointX * self.dt
         self.phaseTheta = np.mod(self.phaseTheta + pointTheta * self.dt, 2 * np.pi)
         self.counts += 1
@@ -155,6 +157,7 @@ class ShortRangePhaseInter(Swarmalators2D):
             self.store.append(key="positionX", value=pd.DataFrame(self.positionX))
             self.store.append(key="phaseTheta", value=pd.DataFrame(self.phaseTheta))
             self.store.append(key="pointX", value=pd.DataFrame(self.temp["pointX"]))
+            self.store.append(key="pointTheta", value=pd.DataFrame(self.temp["pointTheta"]))
 
     def plot(self, ax: plt.Axes = None) -> None:
         if ax is None:
