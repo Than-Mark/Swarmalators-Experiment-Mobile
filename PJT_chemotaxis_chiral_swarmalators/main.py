@@ -604,17 +604,19 @@ class ChemotacticLotkaVolterra(PatternFormation):
 
     def plot(self, ax: plt.Axes = None):
         if ax is None:
-            _, ax = plt.subplots(figsize=(5, 5))
-        ax.scatter(
-            self.positionX[:, 0], self.positionX[:, 1],
-            color=["#F8B08E"] * self.halfAgentsNum + ["#9BD5D5"] * self.halfAgentsNum,
-            s=100 * self.diameter / 0.1 * (2.5 / self.boundaryLength)
-        )
+            _, ax = plt.subplots(figsize=(6, 6))
+        colors = ["#F8B08E"] * self.halfAgentsNum + ["#9BD5D5"] * self.halfAgentsNum
+        for i in range(self.agentsNum):
+            ax.add_artist(plt.Circle(
+                self.positionX[i], self.diameter / 2 * 0.95, zorder=1, 
+                facecolor=colors[i], edgecolor="black"
+                # color=colors[i]
+            ))
         unitDir = self.temp["dotPosition"] / np.linalg.norm(self.temp["dotPosition"], axis=1)[:, None]
         ax.quiver(
             self.positionX[:, 0], self.positionX[:, 1], unitDir[:, 0], unitDir[:, 1],
             color=["#F16623"] * self.halfAgentsNum + ["#49B2B2"] * self.halfAgentsNum,
-            width=0.004, scale=40
+            width=0.004, scale=50
         )
         ax.set_xlim(0, self.boundaryLength)
         ax.set_ylim(0, self.boundaryLength)
@@ -987,18 +989,21 @@ class StateAnalysis:
             fig, ax = plt.subplots(figsize=(6, 6))
         if oscis is None:
             oscis = np.arange(self.model.agentsNum)
-        ax.scatter(
-            positionX[oscis, 0], positionX[oscis, 1],
-            s=100 * self.model.diameter / 0.1 * (2.5 / self.model.boundaryLength), 
-            color=["#F8B08E"] * self.model.halfAgentsNum + ["#9BD5D5"] * self.model.halfAgentsNum,
-            **kwargs
-        )
+        colors = ["#F8B08E"] * self.model.halfAgentsNum + ["#9BD5D5"] * self.model.halfAgentsNum
+        for i in oscis:
+            ax.add_artist(plt.Circle(
+                positionX[i], self.model.diameter / 2 * 0.95, zorder=1, 
+                facecolor=colors[i], edgecolor="black"
+                # color=colors[i]
+            ))
         unitDir = dotPos / np.linalg.norm(dotPos, axis=1)[:, None]
+        colors = ["#F16623"] * self.model.halfAgentsNum + ["#49B2B2"] * self.model.halfAgentsNum
         ax.quiver(
             positionX[oscis, 0], positionX[oscis, 1],
             unitDir[oscis, 0], unitDir[oscis, 1], 
-            color=["#F16623"] * self.model.halfAgentsNum + ["#49B2B2"] * self.model.halfAgentsNum, 
-            width=0.004, scale=40,
+            # color=colors, 
+            facecolor=colors, edgecolor="black",
+            width=0.004, scale=50,
             **kwargs
         )
         ax.set_xlim(0, self.model.boundaryLength)

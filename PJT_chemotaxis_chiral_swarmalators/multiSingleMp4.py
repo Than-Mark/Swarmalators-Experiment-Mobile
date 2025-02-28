@@ -65,15 +65,26 @@ def draw_frame(sa: StateAnalysis):
 
 
 k23 = 0.4
+# model = ChemotacticLotkaVolterra(
+#     k1=0.01, k2=k23, k3=k23, k4=0.01,
+#     boundaryLength=20, speedV=0.00, 
+#     diameter=0.3, repelPower=2,
+#     omega1=0, omega2=0, filedDrive=False,
+#     cellNumInLine=200, agentsNum=1000,
+#     chemoAlpha1=-1, chemoAlpha2=-1,
+#     diffusionRateD1=0.01, diffusionRateD2=0.01,
+#     dt=0.01, shotsnaps=100,
+#     tqdm=True, savePath=SAVE_PATH, overWrite=True
+# )
 model = ChemotacticLotkaVolterra(
     k1=0.01, k2=k23, k3=k23, k4=0.01,
-    boundaryLength=20, speedV=0.0, 
-    diameter=0.3, repelPower=1,
-    omega1=0, omega2=0, filedDrive=False,
+    boundaryLength=20, speedV=0.01, 
+    diameter=0.3, repelPower=2,
+    omega1=0, omega2=0, filedDrive=True,
     cellNumInLine=200, agentsNum=1000,
-    chemoAlpha1=-10, chemoAlpha2=-10,
+    chemoAlpha1=-5, chemoAlpha2=-5,
     diffusionRateD1=0.01, diffusionRateD2=0.01,
-    dt=0.1, shotsnaps=20,
+    dt=0.1, shotsnaps=10,
     tqdm=True, savePath=SAVE_PATH, overWrite=True
 )
 sa = StateAnalysis(model)
@@ -97,7 +108,7 @@ if __name__ == "__main__":
         shutil.rmtree(MP4_TEMP_PATH)
     os.mkdir(MP4_TEMP_PATH)
     
-    with Pool(10) as p:
+    with Pool(8) as p:
         p.map(
             draw_frame,
             tqdm(subSaList, desc="Drawing frames", total=sa.TNum),
