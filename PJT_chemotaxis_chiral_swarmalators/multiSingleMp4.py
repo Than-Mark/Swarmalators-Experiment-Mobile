@@ -77,14 +77,14 @@ k23 = 0.4
 #     tqdm=True, savePath=SAVE_PATH, overWrite=True
 # )
 model = ChemotacticLotkaVolterra(
-    k1=0.01, k2=k23, k3=k23, k4=0.01,
+    k1=0.19, k2=k23, k3=k23, k4=0.19,
     boundaryLength=20, speedV=0.01, 
     diameter=0.3, repelPower=2,
     omega1=0, omega2=0, filedDrive=True,
     cellNumInLine=200, agentsNum=1000,
-    chemoAlpha1=-5, chemoAlpha2=-5,
+    chemoAlpha1=-5, chemoAlpha2=-0.1,
     diffusionRateD1=0.01, diffusionRateD2=0.01,
-    dt=0.1, shotsnaps=10,
+    dt=0.01, shotsnaps=100,
     tqdm=True, savePath=SAVE_PATH, overWrite=True
 )
 sa = StateAnalysis(model)
