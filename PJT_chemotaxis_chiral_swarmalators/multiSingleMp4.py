@@ -77,16 +77,18 @@ k23 = 0.4
 #     tqdm=True, savePath=SAVE_PATH, overWrite=True
 # )
 model = ChemotacticLotkaVolterra(
-    k1=0.19, k2=k23, k3=k23, k4=0.19,
+    k1=0.9, k2=1, k3=1, k4=0.9,
     boundaryLength=20, speedV=0.01, 
     diameter=0.3, repelPower=2,
     omega1=0, omega2=0, filedDrive=True,
     cellNumInLine=200, agentsNum=1000,
-    chemoAlpha1=-5, chemoAlpha2=-0.1,
+    chemoAlpha1=-10, chemoAlpha2=-0.,
     diffusionRateD1=0.01, diffusionRateD2=0.01,
     dt=0.01, shotsnaps=100,
     tqdm=True, savePath=SAVE_PATH, overWrite=True
 )
+
+
 sa = StateAnalysis(model)
 subSaList = list()
 for i in tqdm(range(0, sa.TNum), desc="Processing data"):
@@ -121,6 +123,7 @@ if __name__ == "__main__":
         'ffmpeg',
         '-framerate', str(fps),
         '-i', os.path.join(MP4_TEMP_PATH, "%d.png"),
+        '-vf', 'setpts=0.20*PTS',  
         '-c:v', 'libx264',
         '-pix_fmt', 'yuv420p',
         rf"{MP4_PATH}/{model}.mp4"
