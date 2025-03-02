@@ -537,7 +537,7 @@ class ChemotacticLotkaVolterra(PatternFormation):
     def __init__(self, k1: float, k2: float, k3: float, k4: float,
                  boundaryLength: float = 10, speedV: float = 3, 
                  diameter: float = 0.1, repelPower: float = 1,
-                 omega1: float = 0, omega2: float = 0, filedDrive: bool = False,
+                 omega1: float = 0, omega2: float = 0, fieldDrive: bool = False,
                  chemoAlpha1: float = 1, chemoAlpha2: float = 1,
                  diffusionRateD1: float = 1, diffusionRateD2: float = 1,
                  cellNumInLine: int = 50, agentsNum: int=1000, dt: float=0.01,
@@ -559,7 +559,7 @@ class ChemotacticLotkaVolterra(PatternFormation):
         self.k4 = k4
         self.omega1 = omega1
         self.omega2 = omega2
-        self.filedDrive = filedDrive
+        self.fieldDrive = fieldDrive
         self.diffusionRateD1 = diffusionRateD1
         self.diffusionRateD2 = diffusionRateD2
         self.dt = dt
@@ -572,10 +572,10 @@ class ChemotacticLotkaVolterra(PatternFormation):
         self.halfAgentsNum = agentsNum // 2
         self.chemoAlpha1Mat = chemoAlpha1 * np.concatenate([
             np.ones(self.halfAgentsNum), np.zeros(self.halfAgentsNum)
-        ]).reshape(-1, 1)
+        ])
         self.chemoAlpha2Mat = chemoAlpha2 * np.concatenate([
             np.zeros(self.halfAgentsNum), np.ones(self.halfAgentsNum)
-        ]).reshape(-1, 1)
+        ])
         self.omegaValue = np.concatenate([
             np.ones(self.halfAgentsNum) * omega1, np.ones(self.halfAgentsNum) * omega2
         ])
@@ -687,8 +687,8 @@ class ChemotacticLotkaVolterra(PatternFormation):
         phiC1 = np.arctan2(localGradC1[:, 1], localGradC1[:, 0])
         phiC2 = np.arctan2(localGradC2[:, 1], localGradC2[:, 0])
         return (
-            self.chemoAlpha1 * np.linalg.norm(localGradC1, axis=1) * np.sin(phiC1 - self.phaseTheta) + 
-            self.chemoAlpha2 * np.linalg.norm(localGradC2, axis=1) * np.sin(phiC2 - self.phaseTheta)
+            self.chemoAlpha1Mat * np.linalg.norm(localGradC1, axis=1) * np.sin(phiC1 - self.phaseTheta) + 
+            self.chemoAlpha2Mat * np.linalg.norm(localGradC2, axis=1) * np.sin(phiC2 - self.phaseTheta)
         )
 
     @property
@@ -733,7 +733,7 @@ class ChemotacticLotkaVolterra(PatternFormation):
     
     @property
     def dotTheta(self):
-        if self.filedDrive:
+        if self.fieldDrive:
             return self.omegaValue + self.chemotactic
         else:
             return self.omegaValue
@@ -747,7 +747,7 @@ class ChemotacticLotkaVolterra(PatternFormation):
 
     @property
     def dotPosition(self):
-        if self.filedDrive:
+        if self.fieldDrive:
             return self.speedV * self._direction(self.phaseTheta) + self.shortRepulsion
         else:
             return self.speedV * self._direction(self.phaseTheta) + self.shortRepulsion + self.localGradient
@@ -819,7 +819,7 @@ class ChemotacticLotkaVolterra(PatternFormation):
         name =  (
             f"CLV_K1{self.k1:.3f}_K2{self.k2:.3f}_K3{self.k3:.3f}_K4{self.k4:.3f}"
             f"_a1{self.chemoAlpha1:.1f}_a2{self.chemoAlpha2:.1f}"
-            f"_o1{self.omega1:.1f}_o2{self.omega2:.1f}_{'filedDrive' if self.filedDrive else 'noDrive'}"
+            f"_o1{self.omega1:.1f}_o2{self.omega2:.1f}_{'fieldDrive' if self.fieldDrive else 'noDrive'}"
             f"_D1{self.diffusionRateD1:.3f}_D2{self.diffusionRateD2:.3f}"
             f"_sV{self.speedV:.1f}_d{self.diameter:.1f}_rP{self.repelPower:.1f}"
             f"_bL{self.boundaryLength:.1f}_dt{self.dt:.2f}_cN{self.cellNumInLine}"
