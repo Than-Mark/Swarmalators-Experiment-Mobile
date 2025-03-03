@@ -570,12 +570,14 @@ class ChemotacticLotkaVolterra(PatternFormation):
         self.counts = 0
         self.overWrite = overWrite
         self.halfAgentsNum = agentsNum // 2
-        self.chemoAlpha1Mat = chemoAlpha1 * np.concatenate([
+        self.chemoAlpha1Arr = chemoAlpha1 * np.concatenate([
             np.ones(self.halfAgentsNum), np.zeros(self.halfAgentsNum)
         ])
-        self.chemoAlpha2Mat = chemoAlpha2 * np.concatenate([
+        self.chemoAlpha1Mat = self.chemoAlpha1Arr.reshape(-1, 1)
+        self.chemoAlpha2Arr = chemoAlpha2 * np.concatenate([
             np.zeros(self.halfAgentsNum), np.ones(self.halfAgentsNum)
         ])
+        self.chemoAlpha2Mat = self.chemoAlpha2Arr.reshape(-1, 1)
         self.omegaValue = np.concatenate([
             np.ones(self.halfAgentsNum) * omega1, np.ones(self.halfAgentsNum) * omega2
         ])
@@ -687,8 +689,8 @@ class ChemotacticLotkaVolterra(PatternFormation):
         phiC1 = np.arctan2(localGradC1[:, 1], localGradC1[:, 0])
         phiC2 = np.arctan2(localGradC2[:, 1], localGradC2[:, 0])
         return (
-            self.chemoAlpha1Mat * np.linalg.norm(localGradC1, axis=1) * np.sin(phiC1 - self.phaseTheta) + 
-            self.chemoAlpha2Mat * np.linalg.norm(localGradC2, axis=1) * np.sin(phiC2 - self.phaseTheta)
+            self.chemoAlpha1Arr * np.linalg.norm(localGradC1, axis=1) * np.sin(phiC1 - self.phaseTheta) + 
+            self.chemoAlpha2Arr * np.linalg.norm(localGradC2, axis=1) * np.sin(phiC2 - self.phaseTheta)
         )
 
     @property
