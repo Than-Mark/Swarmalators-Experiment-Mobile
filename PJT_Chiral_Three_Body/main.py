@@ -9,6 +9,7 @@ import numba as nb
 import imageio
 import sys
 import os
+import pickle
 import shutil
 import warnings
 
@@ -47,7 +48,8 @@ plt.rcParams['font.family'] = 'STIXGeneral'
 if os.path.exists("/opt/conda/bin/ffmpeg"):
     plt.rcParams['animation.ffmpeg_path'] = "/opt/conda/bin/ffmpeg"
 else:
-    plt.rcParams['animation.ffmpeg_path'] = "D:/Programs/ffmpeg/bin/ffmpeg.exe"
+    pass
+    # plt.rcParams['animation.ffmpeg_path'] = r"C:\Users\Aero Planck\AppData\Local\Programs\Python\Python312\ffmpeg\bin\ffmpeg.exe"
 
 sys.path.append("..")
 
@@ -59,7 +61,8 @@ new_cmap = mcolors.LinearSegmentedColormap.from_list(
 if os.path.exists("/opt/conda/bin/ffmpeg"):
     plt.rcParams['animation.ffmpeg_path'] = "/opt/conda/bin/ffmpeg"
 else:
-    plt.rcParams['animation.ffmpeg_path'] = "D:/Programs/ffmpeg/bin/ffmpeg.exe"
+    pass
+#    plt.rcParams['animation.ffmpeg_path'] = r"C:\Users\Aero Planck\AppData\Local\Programs\Python\Python312\ffmpeg\bin\ffmpeg.exe"
 
 
 class Swarmalators:
@@ -76,7 +79,7 @@ class Swarmalators:
         self.shotsnaps = shotsnaps
         self.counts = 0
         self.temp = {}
-        self.overWrite = overWrite 
+        self.overWrite = overWrite
 
     def init_store(self):
         if self.savePath is None:
@@ -89,10 +92,9 @@ class Swarmalators:
                     print(f"{self.savePath}/{self}.h5 already exists")
                     return False
             self.store = pd.HDFStore(f"{self.savePath}/{self}.h5")
-            #self.store.close()
+            # self.store.close()
         self.append()
         return True
-
 
     def append(self):
         if self.store is not None:
@@ -100,7 +102,7 @@ class Swarmalators:
                 return
             self.store.append(key="positionX", value=pd.DataFrame(self.positionX))
             self.store.append(key="phaseTheta", value=pd.DataFrame(self.phaseTheta))
-            #self.store.close()
+            # self.store.close()
 
     @property
     def deltaTheta(self) -> np.ndarray:
@@ -186,9 +188,9 @@ class Swarmalators:
         self.counts += 1
 
     def run(self, TNum: int):
-        
+
         if not self.init_store():
-            return 
+            return
 
         if self.tqdm:
             iterRange = tqdm(range(TNum))
@@ -203,14 +205,14 @@ class Swarmalators:
         self.close()
 
     def plot(self) -> None:
-        pass
+            pass
 
     def close(self):
         if self.store is not None:
             self.store.close()
 
 class Swarmalators2D(Swarmalators):
-    def __init__(self,agentsNum: int, dt: float, K: float, randomSeed: int = 100, 
+    def __init__(self, agentsNum: int, dt: float, K: float, randomSeed: int = 100,
                  tqdm: bool = False, savePath: str = None, shotsnaps: int = 5, overWrite: bool = False) -> None:
         np.random.seed(randomSeed)
         self.positionX = np.random.random((agentsNum, 2)) * 2 - 1
@@ -233,7 +235,7 @@ class Swarmalators2D(Swarmalators):
 
         cbar = plt.colorbar(ticks=[0, np.pi, 2*np.pi])
         cbar.ax.set_ylim(0, 2*np.pi)
-        cbar.ax.set_yticklabels(['$0$', '$\pi$', '$2\pi$'])
+        cbar.ax.set_yticklabels(['$0$', '$\\pi$', '$2\\pi$'])
 
     def update_temp(self):
         self.temp["deltaTheta"] = self.deltaTheta
@@ -307,9 +309,9 @@ class Swarmalators2D(Swarmalators):
 ##################################################################################
 
 class ThreeBody(Swarmalators2D):
-    def __init__(self, frustration:float, strengthLambda1: float, strengthLambda2: float, 
+    def __init__(self, strengthLambda1: float, strengthLambda2: float, 
                  distanceD1: float, distanceD2: float, boundaryLength: float = 10, 
-                 omegaTheta2Shift: float = 0, agentsNum: int = 1000, dt: float = 0.01, 
+                 omegaTheta2Shift: float = 0, agentsNum: int=1000, dt: float=0.01, 
                  tqdm: bool = False, savePath: str = None, shotsnaps: int = 5, 
                  uniform: bool = True, randomSeed: int = 10, overWrite: bool = False) -> None:
         """ 
@@ -320,7 +322,7 @@ class ThreeBody(Swarmalators2D):
         self.phaseTheta = np.random.random(agentsNum) * 2 * np.pi - np.pi
         self.agentsNum = agentsNum
         self.dt = dt
-        self.speedV = 0.03
+        self.speedV = 3
         self.distanceD1 = distanceD1
         self.distanceD2 = distanceD2
         if uniform:
@@ -333,14 +335,14 @@ class ThreeBody(Swarmalators2D):
                 np.random.normal(loc=3, scale=0.5, size=agentsNum // 2),
                 np.random.normal(loc=-3, scale=0.5, size=agentsNum // 2)
             ])
-        self.frustration = frustration
         self.uniform = uniform
         self.strengthLambda1 = strengthLambda1
         self.strengthLambda2 = strengthLambda2
         self.tqdm = tqdm
         self.savePath = savePath
         self.temp = np.zeros(agentsNum)
-        self.tempForK = np.zeros((agentsNum, agentsNum))
+        self.tempForK_1 = np.zeros((agentsNum, agentsNum))
+        self.tempForK_2 = np.zeros((agentsNum, agentsNum))
         self.eyeMask = ~np.eye(agentsNum, dtype=bool)
         self.shotsnaps = shotsnaps
         self.counts = 0
@@ -352,19 +354,22 @@ class ThreeBody(Swarmalators2D):
         self.overWrite = overWrite
 
     @property
-    def K(self):
+    def K_1(self):
         return (self.distance_x(self.deltaX) <= self.distanceD1) * self.eyeMask
 
     @property
+    def K_2(self):
+        return (self.distance_x(self.deltaX) <= self.distanceD2) * self.eyeMask
+
+    @property
     def K1(self):
-        return self.tempForK[:, np.newaxis, :]
+        return self.tempForK_1[:, np.newaxis, :]
     
     @property
     def K2(self):
         return (
-            self.tempForK[:, :, np.newaxis] * 
-            self.tempForK[:, np.newaxis, :] 
-            # * self.tempForK[np.newaxis, :, :]
+            self.tempForK_2[:, :, np.newaxis] *
+            self.tempForK_2[:, np.newaxis, :]
         )
 
     @property
@@ -385,26 +390,26 @@ class ThreeBody(Swarmalators2D):
 
     @property
     def pointTheta(self):
-        return self._pointTheta(self.phaseTheta[:, np.newaxis, np.newaxis], 
-                                self.phaseTheta[np.newaxis, np.newaxis, :], 
-                                self.phaseTheta[np.newaxis, :, np.newaxis],
+        return self._pointTheta(self.phaseTheta,
                                 self.omegaTheta, 
                                 self.strengthLambda1, self.strengthLambda2, 
                                 self.K1, self.K2, 
-                                self.dt, self.frustration)
-                                
-    @staticmethod
-    # @nb.njit
-    def _pointTheta(phaseTheta: np.ndarray, other1: np.ndarray, other2: np.ndarray, 
-                    omegaTheta: np.ndarray, strengthLambda1: float, strengthLambda2: float,
-                    K1: np.ndarray, K2: np.ndarray, dt: float, frustration: float) -> np.ndarray:
-        k1 = (
-            omegaTheta 
-            + strengthLambda1 * np.sum(K1 * np.sin(other1 - phaseTheta + frustration), axis=(1, 2))
-            + strengthLambda2 * np.sum(K2 * np.sin(other1 + other2 - 2 * phaseTheta + 2 * frustration), axis=(1, 2))
-        )
-        return k1 * dt
+                                self.dt)
 
+    @staticmethod
+    @nb.njit
+    def _pointTheta(phaseTheta: np.ndarray,
+                    omegaTheta: np.ndarray, strengthLambda1: float, strengthLambda2: float,
+                    K1: np.ndarray, K2: np.ndarray, dt: float) -> np.ndarray:
+        k1 = np.zeros(phaseTheta.shape[0], dtype=np.float64)
+        for i in range(phaseTheta.shape[0]):
+            for j in range(phaseTheta.shape[0]):
+                k1[i] += strengthLambda1 * K1[i, 0, j] * np.sin(phaseTheta[j] - phaseTheta[i])
+                for k in range(phaseTheta.shape[0]):
+                    k1[i] += strengthLambda2 * K2[i, j, k] * np.sin(
+                        phaseTheta[j] + phaseTheta[k] - 2 * phaseTheta[i]
+                    )
+        return (omegaTheta + k1) * dt
 
     def append(self):
         if self.store is not None:
@@ -415,14 +420,14 @@ class ThreeBody(Swarmalators2D):
             self.store.append(key="pointTheta", value=pd.DataFrame(self.temp))
 
     def update(self):
-        self.positionX[:, 0] += self.speedV * np.cos(self.phaseTheta)
-        self.positionX[:, 1] += self.speedV * np.sin(self.phaseTheta)
+        self.positionX[:, 0] += self.speedV * np.cos(self.phaseTheta) * self.dt
+        self.positionX[:, 1] += self.speedV * np.sin(self.phaseTheta) * self.dt
         self.positionX = np.mod(self.positionX, self.boundaryLength)
-        self.tempForK = self.K
+        self.tempForK_1 = self.K_1
+        self.tempForK_2 = self.K_2
         self.temp = self.pointTheta
         self.phaseTheta += self.temp
         self.phaseTheta = np.mod(self.phaseTheta + np.pi, 2 * np.pi) - np.pi
-        self.frustration = self.frustration
 
     def __str__(self) -> str:
         
@@ -445,3 +450,4 @@ class ThreeBody(Swarmalators2D):
     def close(self):
         if self.store is not None:
             self.store.close()
+
