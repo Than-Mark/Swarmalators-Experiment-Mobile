@@ -8,7 +8,7 @@ import warnings
 import os
 
 new_cmap = mcolors.LinearSegmentedColormap.from_list(
-    "new", plt.cm.jet(np.linspace(0, 1, 256)) * 0.85, N=256
+    "new", plt.cm.hsv(np.linspace(0, 1, 256)) * 0.85, N=256
 )
 if os.path.exists("/opt/conda/bin/ffmpeg"):
     plt.rcParams['animation.ffmpeg_path'] = "/opt/conda/bin/ffmpeg"
