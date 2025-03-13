@@ -160,7 +160,7 @@ class ChiralActiveMatterNonreciprocalReact(ChiralActiveMatter):
         strengthLambda: float, 
         distanceD0Mean1: float,  # 手性1的固定d0
         distanceD0Mean2: float,  # 手性2的固定d0
-        chiralNum: int = 1, 
+        chiralNum: int = 2, 
         agentsNum: int = 1000, 
         dt: float = 0.01, 
         tqdm: bool = False, 
@@ -314,8 +314,8 @@ class ChiralActiveMatterNonreciprocalReact(ChiralActiveMatter):
             f"ChiralActiveMatterNonreciprocalReact"
             f"_{self.chiralNum}"
             f"_{self.omegaDistribution}"
-            f"_{self.strengthLambda:.3f}"
-            f"_d0_{self.distanceD0Mean1:.1f}_{self.distanceD0Mean2:.1f}"  # 修改参数名称
+            f"_{self.strengthLambda:.2f}"
+            f"_d0_{self.distanceD0Mean1}_{self.distanceD0Mean2}"  # 修改参数名称
             f"_{self.randomSeed}"
         )
         
