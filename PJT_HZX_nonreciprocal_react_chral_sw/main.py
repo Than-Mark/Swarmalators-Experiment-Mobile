@@ -318,8 +318,6 @@ class ChiralActiveMatterNonreciprocalReact(ChiralActiveMatter):
             f"_d0_{self.distanceD0Mean1}_{self.distanceD0Mean2}"  # 修改参数名称
             f"_{self.randomSeed}"
         )
-        
-        return name
 
 
 class StateAnalysis:
