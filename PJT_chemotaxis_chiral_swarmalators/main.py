@@ -536,7 +536,7 @@ class GSPatternFormation(PatternFormation):
 class ChemotacticLotkaVolterra(PatternFormation):
     def __init__(self, k1: float, k2: float, k3: float, k4: float,
                  boundaryLength: float = 10, speedV: float = 3, 
-                 diameter: float = 0.1, repelPower: float = 1,
+                 diameter: float = 0.1, repelPower: float = 1, repCutOff: bool = True,
                  omega1: float = 0, omega2: float = 0, fieldDrive: bool = False,
                  chemoAlpha1: float = 1, chemoAlpha2: float = 1,
                  diffusionRateD1: float = 1, diffusionRateD2: float = 1,
@@ -585,6 +585,7 @@ class ChemotacticLotkaVolterra(PatternFormation):
         self.chemoAlpha2 = chemoAlpha2
         self.diameter = diameter
         self.repelPower = repelPower
+        self.repCutOff = repCutOff
 
         self.positionX = np.random.random((agentsNum, 2)) * boundaryLength
         # self.positionX = np.concatenate([
@@ -625,22 +626,41 @@ class ChemotacticLotkaVolterra(PatternFormation):
 
     @staticmethod
     @nb.njit
-    def _calc_repulsion(divDeltaX_2: np.ndarray, distance: float, diameter: float):
-        return np.sum(divDeltaX_2 * (distance < diameter), axis=1)
+    def _short_rep(positionX: np.ndarray, diameter: float,
+                   halfBoundaryLength: float, boundaryLength: float, 
+                   power: float, cutOff: bool):
+        if not cutOff:
+            diameter = np.inf
+        rep = np.zeros(positionX.shape)
+        for i in range(positionX.shape[0]):
+            neighbor = positionX[
+                (np.abs(positionX[:, 0] - positionX[i, 0]) % halfBoundaryLength < diameter)
+                & (np.abs(positionX[:, 1] - positionX[i, 1]) % halfBoundaryLength < diameter)
+                & ((positionX[:,0] != positionX[i,0]) | (positionX[:, 1] != positionX[i, 1]))
+            ]
+            if neighbor.shape[0]== 0:
+                continue
+            subX = positionX[i] - neighbor
+            deltaX =(
+                subX * (-halfBoundaryLength<= subX) * (subX<= halfBoundaryLength) + 
+                (subX + boundaryLength) * (subX < -halfBoundaryLength)+
+                (subX - boundaryLength) * (subX > halfBoundaryLength)
+            )
+            distance = np.sqrt(deltaX[:, 0] ** 2 + deltaX[:,1] ** 2).reshape(-1, 1)
+            if cutOff:            
+                rep[i] = np.sum(deltaX / distance ** power * (distance < diameter), axis=0)
+            else:
+                rep[i] = np.sum(deltaX / distance ** power, axis=0)
+        
+        return rep
 
     @property
     def shortRepulsion(self):
-        self.temp["deltaX"] = self.deltaX
-        self.temp["distanceX2"] = self.distance_x_2(self.temp["deltaX"])
-        return -self._calc_repulsion(
-            divDeltaX_2=self.div_distance_power(self.temp["deltaX"], power=self.repelPower), 
-            distance=self.temp["distanceX2"], 
-            diameter=self.diameter
+        return self._short_rep(
+            self.positionX, self.diameter,
+            self.halfBoundaryLength, self.boundaryLength, 
+            self.repelPower, self.repCutOff
         )
-        # return (
-        #     self.div_distance_power(numerator=self.deltaX, power=2) * 
-        #     (self.temp["distanceX2"] < self.radius)
-        # ).sum(axis=1)
 
     @property
     def nablaC1(self):
@@ -749,7 +769,9 @@ class ChemotacticLotkaVolterra(PatternFormation):
 
     @property
     def dotPosition(self):
-        if self.fieldDrive:
+        if self.diameter == 0:
+            return self.speedV * self._direction(self.phaseTheta)
+        elif self.fieldDrive:
             return self.speedV * self._direction(self.phaseTheta) + self.shortRepulsion
         else:
             return self.speedV * self._direction(self.phaseTheta) + self.shortRepulsion + self.localGradient
@@ -823,7 +845,7 @@ class ChemotacticLotkaVolterra(PatternFormation):
             f"_a1{self.chemoAlpha1:.1f}_a2{self.chemoAlpha2:.1f}"
             f"_o1{self.omega1:.1f}_o2{self.omega2:.1f}_{'fieldDrive' if self.fieldDrive else 'noDrive'}"
             f"_D1{self.diffusionRateD1:.3f}_D2{self.diffusionRateD2:.3f}"
-            f"_sV{self.speedV:.1f}_d{self.diameter:.1f}_rP{self.repelPower:.1f}"
+            f"_sV{self.speedV:.1f}_d{self.diameter:.1f}_rP{self.repelPower:.1f}{'' if self.repCutOff else '_longRep'}"
             f"_bL{self.boundaryLength:.1f}_dt{self.dt:.2f}_cN{self.cellNumInLine}"
             f"_r{self.randomSeed}"
         )
