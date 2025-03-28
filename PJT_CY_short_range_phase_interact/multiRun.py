@@ -25,42 +25,46 @@ def colors_idx(phaseTheta):
 import seaborn as sns
 import matplotlib.font_manager as fm
 
-def run_model(model):
-        model.run(10)
+def run_model(param):
+    J, K, d0 = param
+    model = ShortRangePhaseInter(
+        K=K, J=J, d0=d0, 
+        tqdm=True, 
+        savePath=None,
+        # savePath="./data", 
+        overWrite=True
+    ) 
+    model.run(60000)
 
+
+sns.set_theme(font_scale=1.1, rc={
+    'figure.figsize': (6, 5),
+    'axes.facecolor': 'white',
+    'figure.facecolor': 'white',
+    'grid.color': '#dddddd',
+    'grid.linewidth': 0.5,
+    "lines.linewidth": 1.5,
+    'text.color': '#000000',
+    'figure.titleweight': "bold",
+    'xtick.color': '#000000',
+    'ytick.color': '#000000'
+})
+plt.rcParams['axes.unicode_minus'] = False
+plt.rcParams['mathtext.fontset'] = "cm"
+
+from main import *
+
+# 扫描的参数范围
+Js = np.arange(-0.1, 1.01, 0.1).round(2)
+Ks = np.arange(-1.0, 0.11, 0.1).round(2)
+d0s = [0.1, 0.2]
+
+params = [
+    (J, K, d0)
+    for J, K, d0 in product(Js, Ks, d0s)
+]
 
 if __name__ == "__main__":
-
-    sns.set_theme(font_scale=1.1, rc={
-        'figure.figsize': (6, 5),
-        'axes.facecolor': 'white',
-        'figure.facecolor': 'white',
-        'grid.color': '#dddddd',
-        'grid.linewidth': 0.5,
-        "lines.linewidth": 1.5,
-        'text.color': '#000000',
-        'figure.titleweight': "bold",
-        'xtick.color': '#000000',
-        'ytick.color': '#000000'
-    })
-    plt.rcParams['axes.unicode_minus'] = False
-    plt.rcParams['mathtext.fontset'] = "cm"
-
-    from main import *
-
-    # 扫描的参数范围
-    Js = [0.5]
-    Ks = np.arange(-1, 0.21, 0.1).round(2)
-    d0s = [np.inf]
-
-    models = [
-        ShortRangePhaseInter(
-            K=K, J=J, d0=d0, 
-            tqdm=True, savePath="./data", overWrite=True
-        ) 
-        for J, K, d0 in product(Js, Ks, d0s)
-    ]
-
     # processes为进程数，表示同时执行的进程数，可以根据CPU核数进行设置
     with Pool(processes=4) as p:
-        p.map(run_model, models)
+        p.map(run_model, params)
