@@ -309,13 +309,18 @@ class Swarmalators2D(Swarmalators):
     #         deltaX[i, :i], deltaX[i, i:] = subX[i, :i], subX[i, i + 1 :]
     #     return deltaX
     
+    @staticmethod
+    @nb.njit
+    def _calc_div_distance_power(numerator: np.ndarray, denominator: np.ndarray, powerOfDeno: float):
+        return numerator / (denominator ** powerOfDeno)
+
     def div_distance_power(self, numerator: np.ndarray, power: float, dim: int = 2):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             if dim == 2:
-                answer = numerator / self.temp["distanceX2"] ** power
-            else:
-                answer = numerator / self.temp["distanceX"] ** power
+                answer = self._calc_div_distance_power(numerator, self.temp["distanceX2"], power)
+            else:  # dim == 1
+                answer = self._calc_div_distance_power(numerator, self.temp["distanceX"], power)
             
         answer[np.isnan(answer) | np.isinf(answer)] = 0
 

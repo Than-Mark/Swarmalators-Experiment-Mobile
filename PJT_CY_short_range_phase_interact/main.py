@@ -49,14 +49,12 @@ import numpy as np
 
 class ShortRangePhaseInter(Swarmalators2D):
     def __init__(self, K: float, J: float, d0: float, 
-                 agentsNum: int = 500, dt: float = 0.1, 
-                 randomSeed: int = 100, tqdm: bool = False, savePath: str = None, shotsnaps: int = 5, overWrite: bool = False) -> None:
+                 agentsNum: int = 500, dt: float = 0.01, 
+                 randomSeed: int = 100, tqdm: bool = False, savePath: str = None, shotsnaps: int = 100, overWrite: bool = False) -> None:
         super().__init__(agentsNum, dt, K, randomSeed, tqdm, savePath, shotsnaps, overWrite)
         self.J = J
         self.d0 = d0
         self.one = np.ones((agentsNum, agentsNum))
-        self.temp["pointX"] = np.zeros((agentsNum, 2))
-        self.temp["pointTheta"] = np.zeros(agentsNum)
     
     @property
     def Fatt(self) -> np.ndarray:
@@ -68,18 +66,8 @@ class ShortRangePhaseInter(Swarmalators2D):
     @property
     def Frep(self) -> np.ndarray:
         """Effect of phase similarity on spatial repulsion: 1"""
-        return self.one
-    
-    @property
-    def Iatt(self) -> np.ndarray:
-        """Spatial attraction: (x_j - x_i) / |x_j - x_i|"""
-        return self.div_distance_power(numerator=self.temp["deltaX"], power=1)
-    
-    @property
-    def Irep(self) -> np.ndarray:
-        """Spatial repulsion: (x_j - x_i) / |x_j - x_i| ^ 2"""
-        return self.div_distance_power(numerator=self.temp["deltaX"], power=2)
-    
+        return 1
+
     @property
     def velocity(self) -> np.ndarray:
         """Self propulsion velocity: 0"""
@@ -91,73 +79,72 @@ class ShortRangePhaseInter(Swarmalators2D):
         return 0
     
     @property
-    def H(self) -> np.ndarray:
-        """Phase interaction: sin(theta_j - theta_i)"""
-        return np.sin(self.deltaTheta)
-    
-    @property
-    def G(self) -> np.ndarray:
-        """Effect of spatial similarity on phase couplings: 1 / |x_i - x_j|"""
-        return self.div_distance_power(numerator=self.one, power=1, dim=1)
-    
-    @property
     def A(self) -> np.ndarray:
         """Adjacency matrix: 1 if |x_i - x_j| <= d0 else 0"""
         return np.where(self.temp["distanceX"] <= self.d0, 1, 0)
 
     def update(self) -> None:
         self.update_temp()
-        # self.positionX, self.phaseTheta = self._update(
-        #     self.positionX, self.phaseTheta,
-        #     self.velocity, self.omega,
-        #     self.Iatt, self.Irep,
-        #     self.Fatt, self.Frep,
-        #     self.H, self.A,
-        #     self.K, self.dt
-        # )
-        pointX, pointTheta = self._update(
+        self.positionX, self.phaseTheta = self._update(
             self.positionX, self.phaseTheta,
-            self.velocity, self.omega,
-            self.Iatt, self.Irep,
-            self.Fatt, self.Frep,
-            self.H, self.A,
-            self.K, self.dt
+            self.dotPosition, self.dotTheta,
+            self.dt
         )
-        self.temp["pointX"] = pointX
-        self.temp["pointTheta"] = pointTheta
-        self.positionX += pointX * self.dt
-        self.phaseTheta = np.mod(self.phaseTheta + pointTheta * self.dt, 2 * np.pi)
         self.counts += 1
 
     @staticmethod
     @nb.njit
     def _update(
         positionX: np.ndarray, phaseTheta: np.ndarray,
-        velocity: np.ndarray, omega: np.ndarray,
-        Iatt: np.ndarray, Irep: np.ndarray,
-        Fatt: np.ndarray, Frep: np.ndarray,
-        H: np.ndarray, A: np.ndarray,
-        K: float, dt: float
+        dotPosition: np.ndarray, dotTheta: np.ndarray,
+        dt: float
     ):
-        dim = positionX.shape[0]
-        pointX = velocity + np.sum(
-            Iatt * Fatt.reshape((dim, dim, 1)) - Irep * Frep.reshape((dim, dim, 1)),
-            axis=1
-        ) / dim
-        # positionX += pointX * dt
-        pointTheta = omega + K / np.sum(A, axis=1) * np.sum(A * H, axis=1)
-        # phaseTheta = np.mod(phaseTheta + pointTheta * dt, 2 * np.pi)
-        # return positionX, phaseTheta
-        return pointX, pointTheta
+        dotX, dotY = dotPosition
+        positionX[:, 0] = positionX[:, 0] + dotX * dt
+        positionX[:, 1] = positionX[:, 1] + dotY * dt
+        phaseTheta = np.mod(phaseTheta + dotTheta * dt, 2 * np.pi)
+        return positionX, phaseTheta
+    
+    def update_temp(self):
+        self.temp["deltaTheta"] = self.deltaTheta
+        self.temp["deltaX"] = self.deltaX
+        self.temp["distanceX"] = self.distance_x(self.temp["deltaX"])
 
-    def append(self):
-        if self.store is not None:
-            if self.counts % self.shotsnaps != 0:
-                return
-            self.store.append(key="positionX", value=pd.DataFrame(self.positionX))
-            self.store.append(key="phaseTheta", value=pd.DataFrame(self.phaseTheta))
-            self.store.append(key="pointX", value=pd.DataFrame(self.temp["pointX"]))
-            self.store.append(key="pointTheta", value=pd.DataFrame(self.temp["pointTheta"]))
+    @property
+    def dotPosition(self):
+        return self.calc_dot_position(
+            deltaX=self.temp["deltaX"][:, :, 0], 
+            deltaY=self.temp["deltaX"][:, :, 1], 
+            Fatt=self.Fatt,
+            Frep=self.Frep,
+            distance=self.temp["distanceX"]
+        )
+
+    @staticmethod
+    @nb.njit
+    def calc_dot_position(deltaX: np.ndarray, deltaY: np.ndarray, 
+                          Fatt: np.ndarray, Frep: np.ndarray,
+                          distance: np.ndarray):
+        distance = np.where(distance == 0, 1, distance)
+        IattX = deltaX / distance
+        IattY = deltaY / distance
+        IrepX = IattX / distance
+        IrepY = IattY / distance
+        dotX = np.sum(IattX * Fatt - IrepX * Frep, axis=1) / distance.shape[0]
+        dotY = np.sum(IattY * Fatt - IrepY * Frep, axis=1) / distance.shape[0]
+        return dotX, dotY
+
+    @property
+    def dotTheta(self) -> np.ndarray:
+        return self._calc_dot_theta(self.temp["deltaTheta"], self.A, self.omega, self.K)
+
+    @staticmethod
+    @nb.njit
+    def _calc_dot_theta(deltaTheta: np.ndarray, A: np.ndarray, omega: np.ndarray, K: float) -> np.ndarray:
+        coupling = np.zeros(deltaTheta.shape[0])
+        for idx in range(deltaTheta.shape[0]):
+            coupling[idx] = np.mean(np.sin(deltaTheta[idx][A[idx] == 1]))
+        return K * coupling + omega
 
     def plot(self, ax: plt.Axes = None) -> None:
         if ax is None:
@@ -288,7 +275,6 @@ class StateAnalysis:
             maxPos = np.abs(self.totalPositionX[step]).max()
             ax.set_title(rf"$J={self.model.J:.2f},\ K={self.model.K:.2f},\ d_0={self.model.d0}$")
         
-
         if maxPos < 1:
             ax.set_xlim(-1, 1)
             ax.set_ylim(-1, 1)
@@ -356,7 +342,7 @@ def draw_mp4(model: ShortRangePhaseInter, savePath: str = "./data", mp4Path: str
     frames = np.arange(0, TNum, step)
     pbar = tqdm(total=len(frames) + 1)
     fig, ax = plt.subplots(figsize=(6, 5))
-    ani = ma.FuncAnimation(fig, plot_frame, frames=frames, interval=50, repeat=False)
+    ani = ma.FuncAnimation(fig, plot_frame, frames=frames, interval=100, repeat=False)
     ani.save(f"{mp4Path}/{model}.mp4", dpi=150)
     plt.close()
 
