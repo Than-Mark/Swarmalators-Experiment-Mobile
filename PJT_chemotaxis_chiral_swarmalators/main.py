@@ -1033,7 +1033,8 @@ class StateAnalysis:
         ax.set_xlim(0, self.model.boundaryLength)
         ax.set_ylim(0, self.model.boundaryLength)
 
-    def plot_fields(self, ax: plt.Axes = None, index: int = -1, fixExtremum: bool = False):
+    def plot_fields(self, ax: plt.Axes = None, index: int = -1, 
+                    fixExtremum: bool = False, withStream: bool = False):
         if ax is None:
             _, ax = plt.subplots(1, 1, figsize=(5, 7))
         c1: np.ndarray = self.totalC1[index]
@@ -1053,6 +1054,21 @@ class StateAnalysis:
             plt.colorbar(pc2)
             pc1 = ax.imshow(self.totalC1[index].T, cmap=self.c1Maps, vmax=vmaxC1, vmin=vminC1)
             plt.colorbar(pc1)
+
+        if withStream:
+            adjMulti = self.model.cellNumInLine / self.model.boundaryLength
+            cPosition = self.model.cPosition.reshape(self.model.cellNumInLine, self.model.cellNumInLine, 2)
+            X = cPosition[:, :, 0].T * adjMulti
+            Y = cPosition[:, :, 1].T * adjMulti
+            c = c1.T
+            U = np.roll(c, -1, axis=1) - np.roll(c, 1, axis=1)
+            V = np.roll(c, -1, axis=0) - np.roll(c, 1, axis=0)
+            ax.streamplot(X, Y, U, V, color="white", linewidth=1, density=1.5)
+            c = c2.T
+            U = np.roll(c, -1, axis=1) - np.roll(c, 1, axis=1)
+            V = np.roll(c, -1, axis=0) - np.roll(c, 1, axis=0)
+            ax.streamplot(X, Y, U, V, color="black", linewidth=1, density=1.5)
+
         plt.xlim(0, self.model.cellNumInLine)
         plt.ylim(0, self.model.cellNumInLine)
 
