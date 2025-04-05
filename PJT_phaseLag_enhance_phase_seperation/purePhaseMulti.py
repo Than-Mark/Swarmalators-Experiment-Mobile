@@ -17,7 +17,7 @@ def run_model(model):
 if __name__ == "__main__":
 
     new_cmap = mcolors.LinearSegmentedColormap.from_list(
-        "new", plt.cm.hsv(np.linspace(0, 1, 256)) * 0.85, N=256
+        "new", plt.cm.jet(np.linspace(0, 1, 256)) * 0.85, N=256
     )
 
     @nb.njit
@@ -32,19 +32,18 @@ if __name__ == "__main__":
     from multiprocessing import Pool
 
     omegaMins = [0.1]  # np.linspace(0.1, 0.5, 30)
-    phaseLags = np.linspace(-1, 1, 31) * np.pi
+    phaseLags = np.linspace(-1, 1, 51) * np.pi
     randomSeed = 10
 
-    strengthLambda = 0.15 * 32 * 2
+    strengthLambda = 0.15 * 32 * 2 * 2
     deltaOmega = 1
 
-    # SAVE_PATH = "./data"  # 
-    SAVE_PATH = r"D:\MS_ExperimentData\general"
+    SAVE_PATH = "./data"  # r"E:\MS_ExperimentData\general"
 
     models = [
         PurePhaseModel(strengthLambda=strengthLambda,
                        phaseLag=phaseLag, 
-                       distribution="cauchy", initPhaseTheta=np.zeros(1000),
+                       distribution="uniform", # initPhaseTheta=np.zeros(1000),
                        agentsNum=1000,
                        omegaMin=omegaMin, deltaOmega=deltaOmega,
                        savePath=SAVE_PATH, dt=0.01,
@@ -53,10 +52,7 @@ if __name__ == "__main__":
         for phaseLag in phaseLags
     ]
 
-    # for model in models:
-    #     print(str(model))
-
-    with Pool(31) as p:
+    with Pool(51) as p:
         # p.map(run_model, models)
 
         p.map(

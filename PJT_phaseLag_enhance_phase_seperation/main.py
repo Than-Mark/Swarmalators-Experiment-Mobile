@@ -19,7 +19,7 @@ else:
     from tqdm import tqdm
 
 new_cmap = mcolors.LinearSegmentedColormap.from_list(
-    "new", plt.cm.hsv(np.linspace(0, 1, 256)) * 0.85, N=256
+    "new", plt.cm.jet(np.linspace(0, 1, 256)) * 0.85, N=256
 )
 
 @nb.njit
@@ -204,6 +204,49 @@ class MeanFieldChiralInducedPhaseLag(ChiralInducedPhaseLag):
             f"_a{self.phaseLag:.2f}"
             f"_bL{self.boundaryLength}_rS{self.randomSeed}"
         ) + ("_init" if self.useInitPhaseTheta else "")
+    
+
+class TimeVaryingMeanFieldChiralInducedPhaseLag(MeanFieldChiralInducedPhaseLag):
+    def __init__(self, strengthLambda: float, distanceD0: float, 
+                 boundaryLength: float = 10, speedV: float = 3.0,
+                 phaseLagFreqOmega: float = 1, phaseLagAmplitude: float = np.pi / 2,
+                 distribution: str = "uniform", initPhaseTheta: np.ndarray = None,
+                 omegaMin: float = 0.1, deltaOmega: float = 2.0,
+                 agentsNum: int=1000, dt: float=0.02, 
+                 tqdm: bool = False, savePath: str = None, shotsnaps: int = 5, 
+                 randomSeed: int = 10, overWrite: bool = False) -> None:
+        super().__init__(strengthLambda, distanceD0, boundaryLength, speedV, 0, 
+                         distribution, initPhaseTheta, omegaMin, deltaOmega, 
+                         agentsNum, dt, tqdm, savePath, shotsnaps, randomSeed, overWrite)
+        
+        self.phaseLagFreqOmega = phaseLagFreqOmega
+        self.phaseLagAmplitude = phaseLagAmplitude
+        self.phaseLagOnesMatrix = np.sign(self.phaseLagMatrix)
+        
+    @property
+    def pointTheta(self):
+        self.phaseLagMatrix = (
+            self.phaseLagOnesMatrix * self.phaseLagAmplitude * 
+            np.sin(self.phaseLagFreqOmega * self.counts * self.dt)
+        )
+
+        return self._pointTheta(self.phaseTheta, self.omegaTheta, self.strengthLambda, 
+                                self.K, self.phaseLagMatrix)
+    
+    def __str__(self) -> str:
+        if self.distribution == "uniform":
+            distributionInfo = f"di{self.distribution}_oM{self.omegaMin:.2f}_dO{self.deltaOmega:.1f}"
+        else:
+            distributionInfo = f"di{self.distribution}"
+
+        return (
+            f"TimeVaryingMeanFieldChiralInducedPhaseLag"
+            f"_{distributionInfo}"
+            f"_l{self.strengthLambda:.3f}_d{self.distanceD0:.2f}"
+            f"_a{self.phaseLag:.2f}"
+            f"_bL{self.boundaryLength}_rS{self.randomSeed}"
+        ) + ("_init" if self.useInitPhaseTheta else "")
+    
 
 
 class PurePhaseModel(ChiralInducedPhaseLag):
@@ -220,6 +263,12 @@ class PurePhaseModel(ChiralInducedPhaseLag):
             self.useInitPhaseTheta = True
         else:
             self.useInitPhaseTheta = False
+        
+        if distribution == "uniform":
+            self.omegaTheta = np.concatenate([
+                np.random.uniform(omegaMin, omegaMin + deltaOmega, agentsNum // 2),
+                -np.random.uniform(omegaMin, omegaMin + deltaOmega, agentsNum // 2)
+            ])
 
     @property
     def pointTheta(self):
@@ -444,8 +493,7 @@ class StateAnalysis:
             fig, ax = plt.subplots(figsize=(6, 6))
 
         halfAgentsNum = self.model.agentsNum // 2
-        ax.scatter(positionX[:halfAgentsNum, 0], positionX[:halfAgentsNum, 1], color="#FFC8C8")
-        ax.scatter(positionX[halfAgentsNum:, 0], positionX[halfAgentsNum:, 1], color="#99B7E7")
+
         ax.quiver(
             positionX[:halfAgentsNum, 0], positionX[:halfAgentsNum, 1],
             np.cos(phaseTheta[:halfAgentsNum]), np.sin(phaseTheta[:halfAgentsNum]), 
@@ -847,3 +895,66 @@ class StateAnalysis:
             t.append(i)
 
         return np.array([t, r]).T
+    
+
+def draw_mp4(model: MeanFieldChiralInducedPhaseLag):
+
+    targetPath = f"./data/{model}.h5"
+    totalPositionX = pd.read_hdf(targetPath, key="positionX")
+    totalPhaseTheta = pd.read_hdf(targetPath, key="phaseTheta")
+    totalPointTheta = pd.read_hdf(targetPath, key="pointTheta")
+    TNum = totalPositionX.shape[0] // model.agentsNum
+    totalPositionX = totalPositionX.values.reshape(TNum, model.agentsNum, 2)
+    totalPhaseTheta = totalPhaseTheta.values.reshape(TNum, model.agentsNum)
+    totalPointTheta = totalPointTheta.values.reshape(TNum, model.agentsNum)
+    shift = 0
+    class1, class2 = (
+        np.concatenate([np.ones(model.agentsNum // 2), np.zeros(model.agentsNum // 2)]).astype(bool), 
+        np.concatenate([np.zeros(model.agentsNum // 2), np.ones(model.agentsNum // 2)]).astype(bool)
+    )
+
+    def plot_frame(i):
+        pbar.update(1)
+        positionX = totalPositionX[i]
+        phaseTheta = totalPhaseTheta[i]
+        fig.clear()
+        ax1 = plt.subplot(1, 2, 1)
+        ax1.quiver(
+            positionX[class1, 0], positionX[class1, 1],
+            np.cos(phaseTheta[class1]), np.sin(phaseTheta[class1]), color='tomato'
+        )
+        ax1.quiver(
+            positionX[class2, 0], positionX[class2, 1],
+            np.cos(phaseTheta[class2]), np.sin(phaseTheta[class2]), color='dodgerblue'
+        )
+        ax1.set_xlim(0, model.boundaryLength)
+        ax1.set_ylim(0, model.boundaryLength)
+
+        ax2 = plt.subplot(1, 2, 2, projection='3d')
+        hist, bins = np.histogram(phaseTheta[class1], bins=100, range=(-np.pi, np.pi))
+        # print(np.array([np.zeros_like(hist), hist]).shape)
+        ax2.plot_surface(
+            np.cos(bins[:-1]), np.sin(bins[:-1]), 
+            np.array([np.zeros_like(hist), hist]), 
+            color='tomato', alpha=0.5, edgecolor="tomato"
+        )
+        hist, bins = np.histogram(phaseTheta[class2], bins=100, range=(-np.pi, np.pi))
+        ax2.plot_surface(
+            np.cos(bins[:-1]) + shift, np.sin(bins[:-1]) + shift,
+            np.array([np.zeros_like(hist), hist]), 
+            color='dodgerblue', alpha=0.5, edgecolor="dodgerblue"
+        )
+        ax2.set_xlabel(r"$\cos(\theta_I)$")
+        ax2.set_ylabel(r"$\sin(\theta_I)$")
+        ax2.set_zlabel("Count")
+
+    mp4TNum = totalPositionX.shape[0]
+    pbar = tqdm(total=mp4TNum)
+    fig, ax = plt.subplots(figsize=(11, 5))
+    ani = ma.FuncAnimation(fig, plot_frame, frames=np.arange(0, mp4TNum, 1), interval=50, repeat=False)
+    # 编码格式采用H.265
+    ani.save(f"./mp4/{model}.mp4", dpi=250, writer="ffmpeg")
+
+    plt.close()
+
+    pbar.close()
