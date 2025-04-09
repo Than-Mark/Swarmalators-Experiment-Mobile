@@ -155,105 +155,107 @@ class ChiralActiveMatter(Swarmalators2D):
 
 
 class ChiralActiveMatterNonreciprocalReact(ChiralActiveMatter):
-    def __init__(
-        self, 
-        strengthLambda: float, 
-        distanceD0Mean1: float,  # 手性1的固定d0
-        distanceD0Mean2: float,  # 手性2的固定d0
-        chiralNum: int = 2, 
-        agentsNum: int = 1000, 
-        dt: float = 0.01, 
-        tqdm: bool = False, 
-        savePath: str = None, 
-        shotsnaps: int = 5, 
-        omegaDistribution: str = "uniform",  # 移除d0分布参数
-        randomSeed: int = 10, 
-        overWrite: bool = False
-    ) -> None:
-        # 调用父类初始化（临时设置distanceD0=0，后续覆盖）
-        super().__init__(
-            strengthLambda=strengthLambda,
-            distanceD0=0,  # 临时占位值
-            boundaryLength=10,
-            speedV=3.0,
-            agentsNum=agentsNum,
-            dt=dt,
-            tqdm=tqdm,
-            savePath=savePath,
-            shotsnaps=shotsnaps,
-            distribution=omegaDistribution,  # 原omegaDistribution参数
-            randomSeed=randomSeed,
-            overWrite=overWrite
-        )
+    def __init__(self, strengthLambda: float, 
+                 distanceD1Mean: float, distanceD2Mean: float, 
+                 distanceD1Std: float = 0, distanceD2Std: float = 0,
+                 chiralNum: int = 1, agentsNum: int=1000, dt: float=0.01, 
+                 tqdm: bool = False, savePath: str = None, shotsnaps: int = 5, 
+                 d0Distribution: str = "uniform", omegaDistribution: str = "uniform",
+                 randomSeed: int = 10, overWrite: bool = False) -> None:
+        super().__init__(strengthLambda, 0, 10, 3.0,
+                         agentsNum, dt, tqdm, savePath, shotsnaps, omegaDistribution, randomSeed, overWrite)
         
         assert chiralNum in [1, 2], "chiralNum must be 1 or 2"
+        assert d0Distribution in ["uniform", "normal", "lorentzian"], "d0Distribution must be uniform, normal or lorentzian"
         self.chiralNum = chiralNum
-        self.distanceD0Mean1 = distanceD0Mean1
-        self.distanceD0Mean2 = distanceD0Mean2
+        self.strengthLambda = strengthLambda
+        self.distanceD1Mean = distanceD1Mean
+        self.distanceD2Mean = distanceD2Mean
+        self.distanceD1Std = distanceD1Std
+        self.distanceD2Std = distanceD2Std
+        self.d0Distribution = d0Distribution
         self.omegaDistribution = omegaDistribution
-        
-        # ==================== d0分配逻辑 ====================
-        if self.chiralNum == 1:
-            # 单手性：所有粒子使用distanceD0Mean1
-            self.distanceD0 = np.full(agentsNum, distanceD0Mean1)
-        elif self.chiralNum == 2:
-            # 双手性：前一半distanceD0Mean1，后一半distanceD0Mean2
-            half_num = agentsNum // 2
-            self.distanceD0 = np.concatenate([
-                np.full(half_num, distanceD0Mean1),
-                np.full(agentsNum - half_num, distanceD0Mean2)
-            ])
-        
-        # ==================== omegaTheta生成逻辑 ====================
-        singleOmegaDistributionSize = agentsNum if chiralNum == 1 else agentsNum // 2
-        
-        # 生成基础omegaTheta（正手性）
-        if omegaDistribution == "uniform":
-            base_omega = np.random.uniform(1, 3, size=singleOmegaDistributionSize)
-        elif omegaDistribution == "normal":
-            base_omega = np.random.normal(loc=3, scale=0.5, size=singleOmegaDistributionSize)
-        elif omegaDistribution == "lorentzian":
-            base_omega = np.random.standard_cauchy(size=singleOmegaDistributionSize) + 3
-        
-        # 双手性时添加负手性粒子
-        if chiralNum == 2:
-            self.omegaTheta = np.concatenate([base_omega, -base_omega])
-        else:
-            self.omegaTheta = base_omega
 
-        # ==================== 验证对应关系（可选） ====================
-        if self.chiralNum == 2:
-            assert np.all(self.distanceD0[:agentsNum//2] == distanceD0Mean1), "前一半粒子d0分配错误"
-            assert np.all(self.distanceD0[agentsNum//2:] == distanceD0Mean2), "后一半粒子d0分配错误"
-            assert np.all(self.omegaTheta[:agentsNum//2] > 0), "前一半粒子omegaTheta应为正"
-            assert np.all(self.omegaTheta[agentsNum//2:] < 0), "后一半粒子omegaTheta应为负"
+        if chiralNum == 1:
+            if d0Distribution == "uniform":
+                self.distanceD0 = np.random.uniform(distanceD1Mean - distanceD1Std / 2, distanceD1Mean + distanceD1Std / 2, size=agentsNum)
+                assert distanceD1Mean - distanceD1Std / 2 >= 0, "distanceD0Mean - distanceD0Std / 2 must be greater than 0"
+            elif d0Distribution == "normal":
+                self.distanceD0 = np.abs(np.random.normal(loc=distanceD1Mean, scale=distanceD1Std, size=agentsNum))
+            elif d0Distribution == "lorentzian":
+                self.distanceD0 = np.abs(np.random.standard_cauchy(size=agentsNum) * distanceD1Std + 3)  #半宽
+        else:  # chiralNum == 2
+            if d0Distribution == "uniform":
+                self.distanceD0 = np.concatenate([
+                    np.random.uniform(distanceD1Mean - distanceD1Std / 2, distanceD1Mean + distanceD1Std / 2, size=agentsNum // 2),
+                    np.random.uniform(distanceD2Mean - distanceD2Std / 2, distanceD2Mean + distanceD2Std / 2, size=agentsNum // 2)
+                ])
+                assert distanceD1Mean - distanceD1Std / 2 >= 0, "distanceD0Mean - distanceD0Std / 2 must be greater than 0"
+            elif d0Distribution == "normal":
+                self.distanceD0 = np.concatenate([
+                    np.abs(np.random.normal(loc=distanceD1Mean, scale=distanceD1Std, size=agentsNum // 2)),
+                    np.abs(np.random.normal(loc=distanceD2Mean, scale=distanceD2Std, size=agentsNum // 2))
+                ])
+            elif d0Distribution == "lorentzian":
+                self.distanceD0 = np.concatenate([
+                    np.abs(np.random.standard_cauchy(size=agentsNum // 2) * distanceD1Std + 3),
+                    np.abs(np.random.standard_cauchy(size=agentsNum // 2) * distanceD2Std + 3)
+                ])
+
+        singleOmegaDistributionSize = agentsNum if chiralNum == 1 else agentsNum // 2
+        if omegaDistribution == "uniform":
+            self.omegaTheta = np.random.uniform(1, 3, size=singleOmegaDistributionSize)
+        elif omegaDistribution == "normal":
+            self.omegaTheta = np.random.normal(loc=3, scale=0.5, size=singleOmegaDistributionSize)
+        elif omegaDistribution == "lorentzian":
+            self.omegaTheta = np.random.standard_cauchy(size=singleOmegaDistributionSize) + 3
+
+        if chiralNum == 2:
+            self.omegaTheta = np.concatenate([self.omegaTheta, -self.omegaTheta])
 
     def plot(self, fig: plt.Figure = None, axs: List[plt.Axes] = None):
         scale = 23
         width = 0.005
         
-        if fig is None:
-            fig, axs = plt.subplots(1, 2, gridspec_kw={'width_ratios': [5, 6]}, figsize=(11, 5))
-            ax1, ax2 = axs
-            # 更新为使用新参数 distanceD0Mean1 和 distanceD0Mean2
-            fig.text(0.05, 0.95, 
-                    f'ChiralNum: {self.chiralNum}   '
+        if self.distanceD0Std > 0:
+            if fig is None:
+                fig, axs = plt.subplots(1, 2, gridspec_kw={'width_ratios': [1, 1]}, figsize=(12, 5))
+                ax1, ax2 = axs
+                fig.text(0.05, 0.95, 
+                    f'Singlechiral   '
                     f'λ: {self.strengthLambda:.2f}   '
-                    f'd0_1: {self.distanceD0Mean1:.2f}   '  
-                    f'd0_2: {self.distanceD0Mean2:.2f}   '  
-                    f'ω~{self.omegaDistribution}',
-                    ha='left', 
-                    va='top',
-                    fontsize=10
-                )
+                    f'd0~U   '
+                    f'Mean: {self.distanceD0Mean:.2f}   '
+                    f'Length: {self.distanceD0Std:.2f}   '
+                    f'ω~U(1,3)',
+                    ha='left', va='top',  # 水平靠左对齐，垂直靠顶部对齐
+                    fontsize=10)
+            else:
+                ax1, ax2 = axs[0], axs[1]
+            colors = [cmap(i) for i in (self.distanceD0 - self.distanceD0Mean) / self.distanceD0Std + 0.5]
+            d0Min = np.round(self.distanceD0.min())
+            d0Max = np.round(self.distanceD0.max())
+            sca = ax1.scatter(
+                -np.ones_like(self.omegaTheta), -np.ones_like(self.omegaTheta), 
+                c=np.linspace(d0Min, d0Max, len(self.omegaTheta)), cmap=cmap, s=100)
+            cbar = plt.colorbar(sca, ticks=[d0Min, self.distanceD0Mean, d0Max], ax=ax1)
+            cbar.set_label(r"$d_0$", fontsize=16, rotation=0)
         else:
-            ax1, ax2 = axs[0], axs[1]
-        # 单手性：统一颜色
-        if self.chiralNum == 1:
-            colors = ['red'] * self.agentsNum
-        # 双手性：前红后蓝
-        elif self.chiralNum == 2:
-            colors = ['red'] * (self.agentsNum // 2) + ['blue'] * (self.agentsNum // 2)
+            if fig is None:
+                fig, axs = plt.subplots(1, 2, gridspec_kw={'width_ratios': [5, 6]}, figsize=(11, 5))
+                ax1, ax2 = axs
+                fig.text(0.05, 0.95, 
+                    f'Singlechiral   '
+                    f'λ: {self.strengthLambda:.2f}   '
+                    f'd0~U   '
+                    f'Mean: {self.distanceD0Mean:.2f}   '
+                    f'Length: {self.distanceD0Std:.2f}   '
+                    f'ω~U(1,3)',
+                    ha='left', va='top',  # 水平靠左对齐，垂直靠顶部对齐
+                    fontsize=10)
+            else:
+                ax1, ax2 = axs[0], axs[1]
+            colors = [cmap(0) for _ in range(self.omegaTheta.size)]
         
         ax1.quiver(
             self.positionX[:, 0], self.positionX[:, 1],
@@ -309,15 +311,19 @@ class ChiralActiveMatterNonreciprocalReact(ChiralActiveMatter):
         # plt.close(fig)
 
     def __str__(self) -> str:
-        """更新字符串表示"""
-        return (
+        
+        name =  (
             f"ChiralActiveMatterNonreciprocalReact"
             f"_{self.chiralNum}"
+            f"_{self.d0Distribution}"
             f"_{self.omegaDistribution}"
-            f"_{self.strengthLambda:.2f}"
-            f"_d0_{self.distanceD0Mean1}_{self.distanceD0Mean2}"  # 修改参数名称
+            f"_{self.strengthLambda:.3f}"
+            f"_{self.distanceD1Mean:.2f}_{self.distanceD1Std:.2f}"
+            f"_{self.distanceD2Mean:.2f}_{self.distanceD2Std:.2f}"
             f"_{self.randomSeed}"
         )
+        
+        return name
 
 
 class StateAnalysis:
@@ -1210,11 +1216,12 @@ def draw_mp4(model: ChiralActiveMatterNonreciprocalReact):
         model.plot(fig=fig, axs=[ax1, ax2])
 
         text_content = (
-            f'ChiralNum: {model.chiralNum}   '
+            f'Singlechiral   '
             f'λ: {model.strengthLambda:.2f}   '
-            f'd0_1: {model.distanceD0Mean1:.2f}   '
-            f'd0_2: {model.distanceD0Mean2:.2f}   '  # ✅ 显示新参数
-            f'ω~{model.omegaDistribution}'
+            f'd0~U   '
+            f'Mean: {model.distanceD0Mean:.2f}   '
+            f'Length: {model.distanceD0Std:.2f}   '
+            f'ω~U(1,3)'
         )
 
         fig.text(0.5, 0.95, text_content, ha='center', va='center', fontsize=10, color='black')

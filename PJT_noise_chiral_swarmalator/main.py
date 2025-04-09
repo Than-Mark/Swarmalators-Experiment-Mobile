@@ -172,30 +172,36 @@ class ChiralActiveMatter(Swarmalators2D):
 
 class ChiralActiveMatterWithNoise(ChiralActiveMatter):
     def __init__(self, strengthLambda: float, distanceD0: float, 
-                 noiseRateAlpha: float = 1, boundaryLength: float = 10, 
+                 noiseRateAlpha: float = 1, noiseRateBeta: float = 1,
+                 boundaryLength: float = 10, 
                  speedV: float = 3.0, agentsNum: int=1000, dt: float=0.01, 
                  tqdm: bool = False, savePath: str = None, shotsnaps: int = 5, 
                  distribution: str = "uniform", randomSeed: int = 10, overWrite: bool = False) -> None:
         super().__init__(strengthLambda, distanceD0, boundaryLength, speedV,
                          agentsNum, dt, tqdm, savePath, shotsnaps, distribution, randomSeed, overWrite)
         self.noiseRateAlpha = noiseRateAlpha
+        self.noiseRateBeta = noiseRateBeta
     
     @property
     def noise(self):
-        return np.random.normal(loc=0, scale=1, size=self.agentsNum) * self.noiseRatePhase
+        return np.random.normal(loc=0, scale=1, size=self.agentsNum) * self.noiseRateBeta
 
     def update(self):
         self.positionX[:, 0] += (self.speedV * np.cos(self.phaseTheta) + np.random.normal(loc=0, scale=1, size=self.agentsNum) * self.noiseRateAlpha) * self.dt
         self.positionX[:, 1] += (self.speedV * np.sin(self.phaseTheta) + np.random.normal(loc=0, scale=1, size=self.agentsNum) * self.noiseRateAlpha) * self.dt
         self.positionX = np.mod(self.positionX, self.boundaryLength)
         self.temp = self.pointTheta
-        self.phaseTheta += self.temp
+        self.phaseTheta += self.temp + self.noise * self.dt
         self.phaseTheta = np.mod(self.phaseTheta + np.pi, 2 * np.pi) - np.pi
 
     def __str__(self) -> str:
         
-        name =  f"ChiralActiveMatterWithNoise_{self.distribution}_{self.strengthLambda:.3f}_{self.distanceD0:.2f}_{self.randomSeed}_{self.noiseRateAlpha:.2f}"
+        name =  (
+            f"ChiralActiveMatterWithNoise_"
+            f"{self.distribution}_{self.strengthLambda:.3f}_{self.distanceD0:.2f}_"
+            f"{self.randomSeed}_{self.noiseRateAlpha:.2f}_{self.noiseRateBeta:.2f}"
         
+        )
         return name
 
 
@@ -371,20 +377,25 @@ class StateAnalysis:
         )
         return {i + 1: classes[i] for i in range(len(classes))}, centers
 
-    def plot_spatial(self, ax: plt.Axes = None, oscis: np.ndarray = None, index: int = -1, **kwargs):
-        positionX, phaseTheta, pointTheta = self.get_state(index)
+    def plot_spatial(self, ax: plt.Axes = None, index: int = -1):
+        positionX, phaseTheta, _ = self.get_state(index)
 
         if ax is None:
             fig, ax = plt.subplots(figsize=(6, 6))
-        if oscis is None:
-            oscis = np.arange(self.model.agentsNum)
+
+        halfAgentsNum = self.model.agentsNum // 2
 
         ax.quiver(
-            positionX[oscis, 0], positionX[oscis, 1],
-            np.cos(phaseTheta[oscis]), np.sin(phaseTheta[oscis]), **kwargs
+            positionX[:halfAgentsNum, 0], positionX[:halfAgentsNum, 1],
+            np.cos(phaseTheta[:halfAgentsNum]), np.sin(phaseTheta[:halfAgentsNum]), 
+            color="red", alpha=0.8
         )
-        ax.set_xlim(0, 10)
-        ax.set_ylim(0, 10)    
+        ax.quiver(
+            positionX[halfAgentsNum:, 0], positionX[halfAgentsNum:, 1],
+            np.cos(phaseTheta[halfAgentsNum:]), np.sin(phaseTheta[halfAgentsNum:]), color="#414CC7"
+        )
+        ax.set_xlim(0, self.model.boundaryLength)
+        ax.set_ylim(0, self.model.boundaryLength) 
 
     def plot_centers(self, ax: plt.Axes = None, index: int = -1):
         positionX, phaseTheta, pointTheta = self.get_state(index)
