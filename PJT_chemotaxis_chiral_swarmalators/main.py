@@ -534,7 +534,7 @@ class GSPatternFormation(PatternFormation):
     
 
 class ChemotacticLotkaVolterra(PatternFormation):
-    def __init__(self, k1: float, k2: float, k3: float, k4: float,
+    def __init__(self, k1: float, k2: float,
                  boundaryLength: float = 10, speedV: float = 3, 
                  diameter: float = 0.1, repelPower: float = 1, repCutOff: bool = True,
                  omega1: float = 0, omega2: float = 0, fieldDrive: bool = False,
@@ -555,8 +555,6 @@ class ChemotacticLotkaVolterra(PatternFormation):
         self.agentsNum = agentsNum
         self.k1 = k1
         self.k2 = k2
-        self.k3 = k3
-        self.k4 = k4
         self.omega1 = omega1
         self.omega2 = omega2
         self.fieldDrive = fieldDrive
@@ -689,18 +687,16 @@ class ChemotacticLotkaVolterra(PatternFormation):
         return self._product_c(
             cellNumInLine=self.cellNumInLine, 
             ocsiIdx=self.temp["ocsiIdx"][:self.halfAgentsNum],
-            productRateK0=self.c1 * (self.k1 - self.k2 * self.c2)
+            productRateK0=self.k1 * self.c1 * (1 - self.c2)
         )
-        # return self.c1 * (self.k1 - self.k2 * self.c2)
     
     @property
     def productC2(self):
         return self._product_c(
             cellNumInLine=self.cellNumInLine, 
             ocsiIdx=self.temp["ocsiIdx"][self.halfAgentsNum:],
-            productRateK0=self.c2 * (self.k3 * self.c1 - self.k4)
+            productRateK0=self.k2 * self.c2 * (self.c1 - 1)
         )
-        # return self.c2 * (self.k3 * self.c1 - self.k4)
 
     @property
     def chemotactic(self):
@@ -841,13 +837,13 @@ class ChemotacticLotkaVolterra(PatternFormation):
     def __str__(self) -> str:
                 
         name =  (
-            f"CLV_K1{self.k1:.3f}_K2{self.k2:.3f}_K3{self.k3:.3f}_K4{self.k4:.3f}"
+            f"CLV_K1{self.k1:.3f}_K2{self.k2:.3f}"
             f"_a1{self.chemoAlpha1:.1f}_a2{self.chemoAlpha2:.1f}"
             f"_o1{self.omega1:.1f}_o2{self.omega2:.1f}_{'fieldDrive' if self.fieldDrive else 'noDrive'}"
             f"_D1{self.diffusionRateD1:.3f}_D2{self.diffusionRateD2:.3f}"
             f"_sV{self.speedV:.1f}_d{self.diameter:.1f}_rP{self.repelPower:.1f}{'' if self.repCutOff else '_longRep'}"
             f"_bL{self.boundaryLength:.1f}_dt{self.dt:.2f}_cN{self.cellNumInLine}"
-            f"_r{self.randomSeed}"
+            f"_r{self.randomSeed}_agN{self.agentsNum}"
         )
         
         return name
@@ -1046,14 +1042,13 @@ class StateAnalysis:
 
         if c1.mean() > c2.mean():
             pc1 = ax.imshow(self.totalC1[index].T, cmap=self.c1Maps, vmax=vmaxC1, vmin=vminC1)
-            plt.colorbar(pc1)
             pc2 = ax.imshow(self.totalC2[index].T, cmap=self.c2Maps, vmax=vmaxC2, vmin=vminC2)
-            plt.colorbar(pc2)
         else:
             pc2 = ax.imshow(self.totalC2[index].T, cmap=self.c2Maps, vmax=vmaxC2, vmin=vminC2)
-            plt.colorbar(pc2)
             pc1 = ax.imshow(self.totalC1[index].T, cmap=self.c1Maps, vmax=vmaxC1, vmin=vminC1)
-            plt.colorbar(pc1)
+
+        plt.colorbar(pc1)
+        plt.colorbar(pc2)
 
         if withStream:
             adjMulti = self.model.cellNumInLine / self.model.boundaryLength
