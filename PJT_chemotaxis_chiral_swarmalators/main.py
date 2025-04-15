@@ -839,7 +839,7 @@ class ChemotacticLotkaVolterra(PatternFormation):
         name =  (
             f"CLV_K1{self.k1:.3f}_K2{self.k2:.3f}"
             f"_a1{self.chemoAlpha1:.1f}_a2{self.chemoAlpha2:.1f}"
-            f"_o1{self.omega1:.1f}_o2{self.omega2:.1f}_{'fieldDrive' if self.fieldDrive else 'noDrive'}"
+            f"_o1{self.omega1:.2f}_o2{self.omega2:.2f}_{'fieldDrive' if self.fieldDrive else 'noDrive'}"
             f"_D1{self.diffusionRateD1:.3f}_D2{self.diffusionRateD2:.3f}"
             f"_sV{self.speedV:.1f}_d{self.diameter:.1f}_rP{self.repelPower:.1f}{'' if self.repCutOff else '_longRep'}"
             f"_bL{self.boundaryLength:.1f}_dt{self.dt:.2f}_cN{self.cellNumInLine}"

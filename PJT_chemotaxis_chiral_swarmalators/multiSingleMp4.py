@@ -64,26 +64,15 @@ def draw_frame(sa: StateAnalysis):
     plt.close(fig)
 
 
-k23 = 0.4
-# model = ChemotacticLotkaVolterra(
-#     k1=0.01, k2=k23, k3=k23, k4=0.01,
-#     boundaryLength=20, speedV=0.00, 
-#     diameter=0.3, repelPower=2,
-#     omega1=0, omega2=0, filedDrive=False,
-#     cellNumInLine=200, agentsNum=1000,
-#     chemoAlpha1=-1, chemoAlpha2=-1,
-#     diffusionRateD1=0.01, diffusionRateD2=0.01,
-#     dt=0.01, shotsnaps=100,
-#     tqdm=True, savePath=SAVE_PATH, overWrite=True
-# )
+omega = 0.1
 model = ChemotacticLotkaVolterra(
-    k1=0.01, k2=0.4, k3=0.4, k4=0.31,
-    boundaryLength=10, speedV=0.01, 
-    diameter=0.3, repelPower=2,
-    omega1=0, omega2=0, fieldDrive=True,
+    k1=0.092, k2=0.125,
+    boundaryLength=200, speedV=0.1, 
+    diameter=3, repelPower=2, repCutOff=True,
+    omega1=omega, omega2=omega, fieldDrive=True,
     cellNumInLine=200, agentsNum=1000,
     chemoAlpha1=-1, chemoAlpha2=-1,
-    diffusionRateD1=0.01, diffusionRateD2=0.01,
+    diffusionRateD1=1, diffusionRateD2=1,
     dt=0.01, shotsnaps=100,
     tqdm=True, savePath=SAVE_PATH, overWrite=True
 )
