@@ -19,7 +19,7 @@ else:
 randomSeed = 100
 
 new_cmap = mcolors.LinearSegmentedColormap.from_list(
-    "new", plt.cm.hsv(np.linspace(0, 1, 256)) * 0.85, N=256
+    "new", plt.cm.jet(np.linspace(0, 1, 256)) * 0.85, N=256
 )
 
 @nb.njit
@@ -53,10 +53,15 @@ class ChiralSolvable2D(Swarmalators2D):
     def __init__(self, K: float, agentsNum: int = 1000, dt: float = 0.1, 
                  randomSeed: int = 100, tqdm: bool = False, savePath: str = None, shotsnaps: int = 5, overWrite: bool = False) -> None:
         super().__init__(agentsNum, dt, K, randomSeed, tqdm, savePath, shotsnaps, overWrite)
-        self.positionX = np.random.random((agentsNum, 2)) * 2 * np.pi
+        self.positionX = np.random.random((agentsNum, 2)) * np.pi / 2
+        # self.positionX = np.random.random((agentsNum, 2)) * np.pi * 2
         self.one = np.ones((agentsNum, agentsNum))
         self.randomSeed = randomSeed
-        self.speedV = 3
+        self.speedV = 1
+        self.omegaValue = np.concatenate([
+            np.random.uniform(1, 3, size=agentsNum // 2),
+            np.random.uniform(-3, -1, size=agentsNum // 2)
+        ])
 
     def update_temp(self):
         self.temp["deltaTheta"] = self.deltaTheta
@@ -68,8 +73,8 @@ class ChiralSolvable2D(Swarmalators2D):
 
     @property
     def omega(self) -> np.ndarray:
-        """Natural frequency: 0"""
-        return 0
+        """Natural frequency: omega"""
+        return self.omegaValue
 
     @property
     def velocity(self) -> np.ndarray:
@@ -123,7 +128,8 @@ class ChiralSolvable2D(Swarmalators2D):
         dim = positionX.shape[0]
         pointX = velocity
         pointTheta = omega + K * np.sum(H * G, axis=1) / dim
-        positionX = np.mod(positionX + pointX * dt, 2 * np.pi)
+        positionX = np.mod(positionX + pointX * dt, np.pi / 2)
+        # positionX = np.mod(positionX + pointX * dt, np.pi * 2)
         phaseTheta = np.mod(phaseTheta + pointTheta * dt, 2 * np.pi)
         return positionX, phaseTheta
 
@@ -150,12 +156,19 @@ class ChiralSolvable2D(Swarmalators2D):
         cbar.ax.set_ylim(0, 2*np.pi)
         cbar.ax.set_yticklabels(['$0$', '$\pi$', '$2\pi$'])
         if fixLim:
-            ax.set_xlim(0, 2*np.pi)
-            ax.set_xticks([0, np.pi, 2*np.pi])
+            ax.set_xlim(0, np.pi / 2)
+            ax.set_xticks([0, np.pi / 4, np.pi / 2])
             ax.set_xticklabels(['$0$', '$\pi$', '$2\pi$'])
-            ax.set_ylim(0, 2*np.pi)
-            ax.set_yticks([0, np.pi, 2*np.pi])
+            ax.set_ylim(0, np.pi / 2)
+            ax.set_yticks([0, np.pi / 4, np.pi / 2])
             ax.set_yticklabels(['$0$', '$\pi$', '$2\pi$'])
+
+            # ax.set_xlim(0, np.pi * 2)
+            # ax.set_xticks([0, np.pi, np.pi * 2])
+            # ax.set_xticklabels(['$0$', '$\pi$', '$2\pi$'])
+            # ax.set_ylim(0, np.pi * 2)
+            # ax.set_yticks([0, np.pi, np.pi * 2])
+            # ax.set_yticklabels(['$0$', '$\pi$', '$2\pi$'])
 
     def __str__(self):
         name = (

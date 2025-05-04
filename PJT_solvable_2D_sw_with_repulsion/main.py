@@ -2,10 +2,7 @@ import matplotlib.colors as mcolors
 import matplotlib.animation as ma
 import matplotlib.pyplot as plt
 from multiprocessing import Pool
-if "ipykernel_launcher.py" in sys.argv[0]:
-    from tqdm.notebook import tqdm
-else:
-    from tqdm import tqdm
+from tqdm import tqdm
 from itertools import product
 import pandas as pd
 import numpy as np
@@ -18,7 +15,7 @@ import shutil
 randomSeed = 100
 
 new_cmap = mcolors.LinearSegmentedColormap.from_list(
-    "new", plt.cm.hsv(np.linspace(0, 1, 256)) * 0.85, N=256
+    "new", plt.cm.jet(np.linspace(0, 1, 256)) * 0.85, N=256
 )
 
 @nb.njit
@@ -255,50 +252,3 @@ class StateAnalysis:
             cbar = plt.colorbar(sc, ticks=[0, np.pi, 2*np.pi], ax=ax)
             cbar.ax.set_ylim(0, 2*np.pi)
             cbar.ax.set_yticklabels(['$0$', '$\pi$', '$2\pi$'])
-
-
-def draw_mp4(model: Solvable2DWithRepulsion, savePath: str = "./data", mp4Path: str = "./mp4", 
-             step: int = 1, earlyStop: int = None, fixLim: bool = True) -> None:
-
-    targetPath = f"{savePath}/{model}.h5"
-    totalPositionX = pd.read_hdf(targetPath, key="positionX")
-    totalPhaseTheta = pd.read_hdf(targetPath, key="phaseTheta")
-    TNum = totalPositionX.shape[0] // model.agentsNum
-    totalPositionX = totalPositionX.values.reshape(TNum, model.agentsNum, 2)
-    totalPhaseTheta = totalPhaseTheta.values.reshape(TNum, model.agentsNum)
-    sa = StateAnalysis(showTqdm=True)
-
-    if earlyStop is not None:
-        totalPositionX = totalPositionX[:earlyStop]
-        totalPhaseTheta = totalPhaseTheta[:earlyStop]
-        TNum = earlyStop
-
-    def plot_frame(i):
-        positionX = totalPositionX[i]
-        phaseTheta = totalPhaseTheta[i]
-
-        fig.clear()
-        fig.subplots_adjust(left=0.15, right=1, bottom=0.1, top=0.95)
-        ax1 = plt.subplot(1, 1, 1)
-        model.positionX = positionX
-        model.phaseTheta = phaseTheta
-        model.counts = i * model.shotsnaps
-        StateAnalysis.plot_last_state(sa, model, ax1)
-        if fixLim:
-            ax1.set_xlim(0, 2*np.pi)
-            ax1.set_xticks([0, np.pi, 2*np.pi])
-            ax1.set_xticklabels(['$0$', '$\pi$', '$2\pi$'])
-            ax1.set_ylim(0, 2*np.pi)
-            ax1.set_yticks([0, np.pi, 2*np.pi])
-            ax1.set_yticklabels(['$0$', '$\pi$', '$2\pi$'])
-        plt.tight_layout()
-        pbar.update(1)
-
-    frames = np.arange(0, TNum, step)
-    pbar = tqdm(total=len(frames) + 1)
-    fig, ax = plt.subplots(figsize=(6, 5))
-    ani = ma.FuncAnimation(fig, plot_frame, frames=frames, interval=50, repeat=False)
-    ani.save(f"{mp4Path}/{model}.mp4", dpi=150)
-    plt.close()
-
-    pbar.close()

@@ -64,36 +64,37 @@ def draw_frame(sa: StateAnalysis):
     plt.close(fig)
 
 
-omega = 0.1
-model = ChemotacticLotkaVolterra(
-    k1=0.092, k2=0.125,
-    boundaryLength=200, speedV=0.1, 
-    diameter=3, repelPower=2, repCutOff=True,
-    omega1=omega, omega2=omega, fieldDrive=True,
-    cellNumInLine=200, agentsNum=1000,
-    chemoAlpha1=-1, chemoAlpha2=-1,
-    diffusionRateD1=1, diffusionRateD2=1,
-    dt=0.01, shotsnaps=100,
-    tqdm=True, savePath=SAVE_PATH, overWrite=True
-)
-
-
-sa = StateAnalysis(model)
-subSaList = list()
-for i in tqdm(range(0, sa.TNum), desc="Processing data"):
-    subSa = StateAnalysis()
-    subSa.totalPositionX = [sa.totalPositionX[i]]
-    subSa.totalPhaseTheta = [sa.totalPhaseTheta[i]]
-    subSa.totalDotPos = [sa.totalDotPos[i]]
-    subSa.totalC1 = [sa.totalC1[i]]
-    subSa.totalC2 = [sa.totalC2[i]]
-    subSa.model = sa.model
-    subSa.index = i
-    subSa.maxC1, subSa.maxC2 = sa.maxC1, sa.maxC2
-    subSa.minC1, subSa.minC2 = sa.minC1, sa.minC2
-    subSaList.append(subSa)
 
 if __name__ == "__main__":
+
+    omega = 0.
+    model = ChemotacticLotkaVolterra(
+        k1=0.092, k2=0.125,
+        boundaryLength=200, speedV=0.1, 
+        diameter=3, repelPower=2, repCutOff=True,
+        omega1=omega, omega2=omega, fieldDrive=True,
+        cellNumInLine=200, agentsNum=1000,
+        chemoAlpha1=-1, chemoAlpha2=-1,
+        diffusionRateD1=1, diffusionRateD2=1,
+        dt=0.1, shotsnaps=10,
+        tqdm=True, savePath=SAVE_PATH, overWrite=True
+    )
+
+
+    sa = StateAnalysis(model)
+    subSaList = list()
+    for i in tqdm(range(0, sa.TNum), desc="Processing data"):
+        subSa = StateAnalysis()
+        subSa.totalPositionX = [sa.totalPositionX[i]]
+        subSa.totalPhaseTheta = [sa.totalPhaseTheta[i]]
+        subSa.totalDotPos = [sa.totalDotPos[i]]
+        subSa.totalC1 = [sa.totalC1[i]]
+        subSa.totalC2 = [sa.totalC2[i]]
+        subSa.model = sa.model
+        subSa.index = i
+        subSa.maxC1, subSa.maxC2 = sa.maxC1, sa.maxC2
+        subSa.minC1, subSa.minC2 = sa.minC1, sa.minC2
+        subSaList.append(subSa)
 
     if os.path.exists(MP4_TEMP_PATH):
         shutil.rmtree(MP4_TEMP_PATH)
