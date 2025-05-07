@@ -47,7 +47,7 @@ from swarmalatorlib.template import Swarmalators2D
 import numpy as np
 
 
-class ShortRangePhaseInter(Swarmalators2D):
+class ShortRangePhaseInter1(Swarmalators2D):
     def __init__(self, K: float, J: float, d0: float, 
                  agentsNum: int = 500, dt: float = 0.01, 
                  randomSeed: int = 100, tqdm: bool = False, savePath: str = None, shotsnaps: int = 100, overWrite: bool = False) -> None:
@@ -104,11 +104,12 @@ class ShortRangePhaseInter(Swarmalators2D):
         positionX[:, 1] = positionX[:, 1] + dotY * dt
         phaseTheta = np.mod(phaseTheta + dotTheta * dt, 2 * np.pi)
         return positionX, phaseTheta
-    
+
     def update_temp(self):
         self.temp["deltaTheta"] = self.deltaTheta
         self.temp["deltaX"] = self.deltaX
         self.temp["distanceX"] = self.distance_x(self.temp["deltaX"])
+        self.temp["distanceX"] = np.where(self.temp["distanceX"] == 0, 1, self.temp["distanceX"])
 
     @property
     def dotPosition(self):
@@ -125,7 +126,6 @@ class ShortRangePhaseInter(Swarmalators2D):
     def calc_dot_position(deltaX: np.ndarray, deltaY: np.ndarray, 
                           Fatt: np.ndarray, Frep: np.ndarray,
                           distance: np.ndarray):
-        distance = np.where(distance == 0, 1, distance)
         IattX = deltaX / distance
         IattY = deltaY / distance
         IrepX = IattX / distance
@@ -160,11 +160,30 @@ class ShortRangePhaseInter(Swarmalators2D):
         ax.set_title(rf"$J={self.J:.2f},\ K={self.K:.2f},\ d_0={self.d0}$")
 
     def __str__(self) -> str:
-        return f"ShortRangePhaseInter_a{self.agentsNum}_K{self.K:.2f}_J{self.J:.2f}_d0{self.d0:.2f}"
+        return f"ShortRangePhaseInter1_a{self.agentsNum}_K{self.K:.2f}_J{self.J:.2f}_d0{self.d0:.2f}"
     
 
+class ShortRangePhaseInter2(ShortRangePhaseInter1):
+    @property
+    def dotTheta(self) -> np.ndarray:
+        return self._calc_dot_theta(self.temp["deltaTheta"], self.A, self.omega, self.K, self.temp["distanceX"])
+
+    @staticmethod
+    @nb.njit
+    def _calc_dot_theta(deltaTheta: np.ndarray, A: np.ndarray, omega: np.ndarray, K: float, distance: np.ndarray) -> np.ndarray:
+        coupling = np.zeros(deltaTheta.shape[0])
+        for idx in range(deltaTheta.shape[0]):
+            coupling[idx] = np.mean(
+                np.sin(deltaTheta[idx][A[idx] == 1]) / distance[idx][A[idx] == 1]
+            )
+        return K * coupling + omega
+    
+    def __str__(self) -> str:
+        return f"ShortRangePhaseInter2_a{self.agentsNum}_K{self.K:.2f}_J{self.J:.2f}_d0{self.d0:.2f}"
+
+
 class StateAnalysis:
-    def __init__(self, model: ShortRangePhaseInter = None, lookIndex: int = -1, showTqdm: bool = False):
+    def __init__(self, model: ShortRangePhaseInter1 = None, lookIndex: int = -1, showTqdm: bool = False):
         self.lookIndex = lookIndex
         self.showTqdm = showTqdm
 
@@ -189,29 +208,29 @@ class StateAnalysis:
         return self.totalPositionX[index], self.totalPhaseTheta[index]
 
     @staticmethod
-    def calc_order_parameter_R(model: ShortRangePhaseInter) -> float:
+    def calc_order_parameter_R(model: ShortRangePhaseInter1) -> float:
         return np.abs(np.sum(np.exp(1j * model.phaseTheta))) / model.agentsNum
     
     @staticmethod
-    def calc_order_parameter_S(model: ShortRangePhaseInter) -> float:
+    def calc_order_parameter_S(model: ShortRangePhaseInter1) -> float:
         phi = np.arctan2(model.positionX[:, 1], model.positionX[:, 0])
         Sadd = np.abs(np.sum(np.exp(1j * (phi + model.phaseTheta)))) / model.agentsNum
         Ssub = np.abs(np.sum(np.exp(1j * (phi - model.phaseTheta)))) / model.agentsNum
         return np.max([Sadd, Ssub])
 
     @staticmethod
-    def calc_order_parameter_Vp(model: ShortRangePhaseInter) -> float:
+    def calc_order_parameter_Vp(model: ShortRangePhaseInter1) -> float:
         pointX = model.temp["pointX"]
         phi = np.arctan2(pointX[:, 1], pointX[:, 0])
         return np.abs(np.sum(np.exp(1j * phi))) / model.agentsNum
     
     @staticmethod
-    def calc_order_parameter_Ptr(model: ShortRangePhaseInter) -> float:
+    def calc_order_parameter_Ptr(model: ShortRangePhaseInter1) -> float:
         pointTheta = model.temp["pointTheta"]
         Ntr = np.abs(pointTheta - model.driveThateVelocityOmega) < 0.2 / model.dt * 0.1
         return Ntr.sum() / model.agentsNum
     
-    def plot_last_state(self, model: ShortRangePhaseInter = None, ax: plt.Axes = None, withColorBar: bool =True, 
+    def plot_last_state(self, model: ShortRangePhaseInter1 = None, ax: plt.Axes = None, withColorBar: bool =True, 
                         s: float = 50) -> None:
         if ax is None:
             fig, ax = plt.subplots(figsize=(5, 4))
@@ -250,11 +269,11 @@ class StateAnalysis:
 
         
     
-    def plot_state_at_step(self, model: ShortRangePhaseInter = None, ax: plt.Axes = None, withColorBar: bool =True, 
+    def plot_state_at_step(self, model: ShortRangePhaseInter1 = None, ax: plt.Axes = None, withColorBar: bool =True, 
                            step: int = 9000, s: float = 50) -> None:
         """
         绘制指定时间步 (step) 的模型状态，如果没有传递 step，则绘制最后一步的状态
-        :param model: ShortRangePhaseInter 模型
+        :param model: ShortRangePhaseInter1 模型
         :param ax: matplotlib 的坐标轴对象
         :param step: 要绘制的时间步，如果为 None,则绘制最后一步
         :param withColorBar: 是否显示颜色条
@@ -304,7 +323,7 @@ class StateAnalysis:
 
 
 
-def draw_mp4(model: ShortRangePhaseInter, savePath: str = "./data", mp4Path: str = "./mp4", step: int = 1, earlyStop: int = None):
+def draw_mp4(model: ShortRangePhaseInter1, savePath: str = "./data", mp4Path: str = "./mp4", step: int = 1, earlyStop: int = None):
 
     targetPath = f"{savePath}/{model}.h5"
     totalPositionX = pd.read_hdf(targetPath, key="positionX")
