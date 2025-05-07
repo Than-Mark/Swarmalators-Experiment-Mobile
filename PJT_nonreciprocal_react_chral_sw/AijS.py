@@ -39,7 +39,7 @@ def calculate_rho_single(position_data, d_value, agents_per_time):
     TNum = position_data.shape[0] // agents_per_time
     rho_avg_over_time = []
     
-    for t in range(0, TNum, 5):
+    for t in range(TNum):
         # 提取当前时间步的位置数据
         pos = position_data[t*agents_per_time : (t+1)*agents_per_time]
         
@@ -147,7 +147,7 @@ def plot_single_d1_figure(d1_value, base_params):
                 )
         ax_plot[i] = fig.add_subplot(gs[i, 7:9])
   
-    # ==================== 数据加载 ====================
+    # ==================== 数据加载和绘制单手性行 ====================
     # 单手性数据
     model_single = AdjustedChiralModel(
         chiralNum=1,
@@ -170,12 +170,14 @@ def plot_single_d1_figure(d1_value, base_params):
         positionX_single, d1_value, single_agents
     )
 
-    # 双手性数据
-    rho_d1_dict = {}
-    rho_d2_dict = {}
-    positionX_double = {}
-    phase_data_double = {}
-    for d2 in d2_values:
+    # 清理单手性数据，释放内存
+    del positionX_single, phase_data_single, rho_single
+    import gc
+    gc.collect()
+
+    # ==================== 绘制双手性行 ====================
+    for row_idx, d2 in enumerate(d2_values, start=1):
+        # 加载当前d2值对应的数据
         model = AdjustedChiralModel(
             chiralNum=2,
             agentsNum=actual_agents_num,
@@ -189,56 +191,15 @@ def plot_single_d1_figure(d1_value, base_params):
         )
         target_path = f"{model.savePath}/{model}.h5"
         pos_data = pd.read_hdf(target_path, key="positionX").values.reshape(-1, 2)
-        phaseTheta_data = pd.read_hdf(target_path, key="phaseTheta").values.reshape(-1, 1)
-        
-        positionX_double[d2] = pos_data
-        phase_data_double[d2] = phaseTheta_data
+        phase_data = pd.read_hdf(target_path, key="phaseTheta").values.reshape(-1, 1)
         
         # 计算双手性 rho
         rho_d1, rho_d2 = calculate_rho_double(
             pos_data, d1_value, d2, actual_agents_num
         )
-        rho_d1_dict[d2] = rho_d1
-        rho_d2_dict[d2] = rho_d2
-
-    # ==================== 绘图逻辑 ====================
-    # 绘制单手性行
-    alpha_rate = 0.8
-    time_indices = np.linspace(0, len(rho_single)-1, total_cols, dtype=int)
-    for j in range(total_cols):
-        ax = ax_quiver[(0,j)]
-        t_idx = time_indices[j]
         
-        # 获取位置数据
-        pos = positionX_single[t_idx*single_agents : (t_idx+1)*single_agents]
-        phaseTheta = phase_data_single[t_idx*single_agents : (t_idx+1)*single_agents]
-        omega = model_single.omegaTheta  
-        alphas = (np.abs(omega) - 1) / 2 * alpha_rate + (1 - alpha_rate)
-
-        # 绘制箭头
-        single_colors = np.zeros((single_agents, 4))          # 形状 (1000, 4)
-        single_colors[:, :3] = [1, 0, 0]             # RGB 设为红色
-        single_colors[:, 3] = alphas[:single_agents]          # 透明度
-
-        ax.quiver(
-                pos[:,0], pos[:,1],        
-                np.cos(phaseTheta), np.sin(phaseTheta),  
-                color=single_colors,                     
-                scale=25, width=0.005, headlength=5, headwidth=3, headaxislength=4
-            )
-        col_titles = ["t=0", "t=10k", "t=20k", "t=30k", "t=40k", "t=50k", "t=60k"]
-        ax.set_title(col_titles[j], fontsize=8, pad=4)    #行标签
-        ax.set(xlim=(0,10), ylim=(0,10))
-        # 绘制折线图
-        if j == 0:
-            ax_plot[0].plot(rho_single, color='black', label='Single')
-            ax_plot[0].set(xlabel='t', ylabel='rho')
-
-    # 绘制双手性行
-    for row_idx, d2 in enumerate(d2_values, start=1):
-        pos_data = positionX_double[d2]
-        phase_data = phase_data_double[d2]
-        TNum = len(rho_d1_dict[d2])
+        # 绘制当前d2值的所有时间点
+        TNum = len(rho_d1)
         time_indices = np.linspace(0, TNum-1, total_cols, dtype=int)
         
         for j in range(total_cols):
@@ -280,12 +241,16 @@ def plot_single_d1_figure(d1_value, base_params):
             # 绘制折线图
             if j == 0:
                 ax_plot[row_idx].plot(
-                    rho_d1_dict[d2], color='red', label=f'd1={d1_value}'
+                    rho_d1, color='red', label=f'd1={d1_value}'
                 )
                 ax_plot[row_idx].plot(
-                    rho_d2_dict[d2], color='blue', label=f'd2={d2}'
+                    rho_d2, color='blue', label=f'd2={d2}'
                 )
                 ax_plot[row_idx].set(xlabel='t', ylabel='rho')
+        
+        # 清理当前d2值的数据，释放内存
+        del pos_data, phase_data, rho_d1, rho_d2
+        gc.collect()
 
     # ==================== 保存图像 ====================
     plt.tight_layout()
