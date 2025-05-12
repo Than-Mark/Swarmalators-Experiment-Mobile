@@ -51,17 +51,25 @@ import numpy as np
 
 class ChiralSolvable2D(Swarmalators2D):
     def __init__(self, K: float, agentsNum: int = 1000, dt: float = 0.1, 
-                 randomSeed: int = 100, tqdm: bool = False, savePath: str = None, shotsnaps: int = 5, overWrite: bool = False) -> None:
+                 randomSeed: int = 100, tqdm: bool = False, distribution: str = "uniform", 
+                 savePath: str = None, shotsnaps: int = 5, overWrite: bool = False) -> None:
+        assert distribution in ["uniform", "cauchy"], "distribution must be 'uniform' or 'cauchy'"
+        
         super().__init__(agentsNum, dt, K, randomSeed, tqdm, savePath, shotsnaps, overWrite)
+        
         self.positionX = np.random.random((agentsNum, 2)) * np.pi / 2
         # self.positionX = np.random.random((agentsNum, 2)) * np.pi * 2
         self.one = np.ones((agentsNum, agentsNum))
         self.randomSeed = randomSeed
         self.speedV = 1
-        self.omegaValue = np.concatenate([
-            np.random.uniform(1, 3, size=agentsNum // 2),
-            np.random.uniform(-3, -1, size=agentsNum // 2)
-        ])
+        self.distribution = distribution
+        if distribution == "uniform":
+            self.omegaValue = np.concatenate([
+                np.random.uniform(1, 3, size=agentsNum // 2),
+                np.random.uniform(-3, -1, size=agentsNum // 2)
+            ])
+        elif distribution == "cauchy":
+            self.omegaValue = np.random.standard_cauchy(size=agentsNum)
 
     def update_temp(self):
         self.temp["deltaTheta"] = self.deltaTheta
@@ -120,16 +128,14 @@ class ChiralSolvable2D(Swarmalators2D):
     def _update(
         positionX: np.ndarray, phaseTheta: np.ndarray,
         velocity: np.ndarray, omega: np.ndarray,
-        Iatt: np.ndarray, Irep: np.ndarray,
-        Fatt: np.ndarray, Frep: np.ndarray,
         H: np.ndarray, G: np.ndarray,
         K: float, dt: float
     ):
         dim = positionX.shape[0]
         pointX = velocity
         pointTheta = omega + K * np.sum(H * G, axis=1) / dim
-        positionX = np.mod(positionX + pointX * dt, np.pi / 2)
-        # positionX = np.mod(positionX + pointX * dt, np.pi * 2)
+        # positionX = np.mod(positionX + pointX * dt, np.pi / 2)
+        positionX = np.mod(positionX + pointX * dt, np.pi * 2)
         phaseTheta = np.mod(phaseTheta + pointTheta * dt, 2 * np.pi)
         return positionX, phaseTheta
 
@@ -138,8 +144,6 @@ class ChiralSolvable2D(Swarmalators2D):
         self.positionX, self.phaseTheta = self._update(
             self.positionX, self.phaseTheta,
             self.velocity, self.omega,
-            self.Iatt, self.Irep,
-            self.Fatt, self.Frep,
             self.H, self.G,
             self.K, self.dt
         )
@@ -176,6 +180,7 @@ class ChiralSolvable2D(Swarmalators2D):
             f"Agents.{self.agentsNum}_"
             f"K.{self.K}_"
             f"dt.{self.dt}_"
+            f"distribution.{self.distribution}_"
             f"seed.{self.randomSeed}"
         )
         return name
