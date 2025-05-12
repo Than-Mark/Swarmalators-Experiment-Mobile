@@ -72,8 +72,7 @@ class ChiralSolvable2D(Swarmalators2D):
             self.omegaValue = np.random.standard_cauchy(size=agentsNum)
 
     def update_temp(self):
-        self.temp["deltaTheta"] = self.deltaTheta
-        self.temp["deltaX"] = self.deltaX
+        pass
 
     def cotDeltaX(self, deltaX: np.ndarray) -> np.ndarray:
         """Cotangent of spatial difference: cot(x_j - x_i)"""
@@ -87,7 +86,12 @@ class ChiralSolvable2D(Swarmalators2D):
     @property
     def velocity(self) -> np.ndarray:
         """Self propulsion velocity: 0"""
-        return self.speedV * np.array([np.cos(self.phaseTheta), np.sin(self.phaseTheta)]).T
+        return self._velocity(self.speedV, self.phaseTheta)
+    
+    @staticmethod
+    @nb.njit
+    def _velocity(speedV: float, phaseTheta: np.ndarray) -> np.ndarray:
+        return speedV * np.cos(phaseTheta), speedV * np.sin(phaseTheta)
 
     @property 
     def Fatt(self) -> np.ndarray:
@@ -104,7 +108,7 @@ class ChiralSolvable2D(Swarmalators2D):
     @property
     def Iatt(self) -> np.ndarray:
         """Spatial attraction: sin(x_j - x_i)"""
-        return np.sin(self.temp["deltaX"])
+        return 0
 
     @property
     def Irep(self) -> np.ndarray:
@@ -121,7 +125,12 @@ class ChiralSolvable2D(Swarmalators2D):
         """
         Effect of spatial similarity on phase couplings: cos(x_j - x_i) + cos(y_j - y_i)
         """
-        return np.cos(self.deltaX).sum(axis=-1)
+        return self._G(self.deltaX)
+
+    @staticmethod
+    @nb.njit
+    def _G(deltaX: np.ndarray) -> np.ndarray:
+        return np.cos(deltaX[:, :, 0]) + np.cos(deltaX[:, :, 1])
 
     @staticmethod
     @nb.njit
@@ -132,10 +141,10 @@ class ChiralSolvable2D(Swarmalators2D):
         K: float, dt: float
     ):
         dim = positionX.shape[0]
-        pointX = velocity
+        dotX, dotY = velocity
+        positionX[:, 0] = np.mod(positionX[:, 0] + dotX * dt, np.pi * 2)
+        positionX[:, 1] = np.mod(positionX[:, 1] + dotY * dt, np.pi * 2)
         pointTheta = omega + K * np.sum(H * G, axis=1) / dim
-        # positionX = np.mod(positionX + pointX * dt, np.pi / 2)
-        positionX = np.mod(positionX + pointX * dt, np.pi * 2)
         phaseTheta = np.mod(phaseTheta + pointTheta * dt, 2 * np.pi)
         return positionX, phaseTheta
 
