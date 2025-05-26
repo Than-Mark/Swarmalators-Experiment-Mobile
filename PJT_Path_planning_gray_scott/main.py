@@ -336,14 +336,6 @@ class PatternFormation(Swarmalators2D):
                 rep[i] = np.sum(deltaX / distance ** power, axis=0)
         
         return rep
-
-    @property
-    def shortRepulsion(self):
-        return self._short_rep(
-            self.positionX, self.diameter,
-            self.halfBoundaryLength, self.boundaryLength, 
-            self.repelPower, self.repCutOff
-        )
     
     @staticmethod
     @nb.njit
@@ -354,52 +346,48 @@ class PatternFormation(Swarmalators2D):
         return productC * productRateK0
 
 
-class PathPlanningGS(PatternFormation):
+class PathPlanningGSC(PatternFormation):
     def __init__(self, 
                  nodePosition: np.ndarray, 
-                 productRateBetau: float, productRateBetav: float,
-                 boundaryLength: float = 100, 
-                 u0: float = 0.5, v0: float = 0.5,
-                 productRateKu: float = 1, productRateKv: float = 1,
-                 decayRateKd: float = 1, decayRateKf: float = 1,
+                 productRateBetac: float,
+                 cUpperThres: float = 3, cDecayBase: float = 0.8, cControlThres: float = 0.5,
+                 boundaryLength: float = 100, noiseRateBetaDp: float = 0.1,
+                 decayRateKc: float = 1,
                  diameter: float = 0.1, 
                  repelPower: float = 1, repCutOff: bool = True,
-                 chemoAlphaU: float = 1, chemoAlphaV: float = 1, 
-                 diffusionRateDu: float = 1, diffusionRateDv: float = 1, 
+                 chemoAlphaC: float = 1,
+                 diffusionRateDc: float = 1,
                  cellNumInLine: int = 100, 
-                 typeA: str = "distanceWgt", agentsNum: int=1000, dt: float=0.01, 
+                 agentsNum: int=1000, dt: float=0.01, 
                  tqdm: bool = False, savePath: str = None, shotsnaps: int = 10, 
                  randomSeed: int = 10, overWrite: bool = False) -> None:
-
-        assert typeA in ["distanceWgt", "heaviside"]
 
         self.halfAgentsNum = agentsNum // 2
 
         np.random.seed(randomSeed)
         self.nodePosition = nodePosition
         self.positionX = np.random.random((agentsNum, 2)) * boundaryLength
-        self.phaseTheta = np.random.random(agentsNum) * 2 * np.pi - np.pi
+        self.internalState = np.ones(agentsNum) * 0.5
         self.cellNumInLine = cellNumInLine
         self.cPosition = np.array(list(product(np.linspace(0, boundaryLength, cellNumInLine), repeat=2)))
         self.dx = boundaryLength / (cellNumInLine - 1)
         self.agentsNum = agentsNum
-        self.decayRateKf = decayRateKf
-        self.decayRateKd = decayRateKd
-        self.diffusionRateDu = diffusionRateDu
-        self.diffusionRateDv = diffusionRateDv
+        self.decayRateKc = decayRateKc
+        self.diffusionRateDc = diffusionRateDc
         self.dt = dt
         self.diameter = diameter
         self.repelPower = repelPower
         self.repCutOff = repCutOff
-        
-        productAdjMulti = boundaryLength**2 / cellNumInLine**2
-        self.productRateKu = productRateKu * productAdjMulti
-        self.productRateKv = productRateKv * productAdjMulti
-        self.productRateBetau = productRateBetau * productAdjMulti
-        self.productRateBetav = productRateBetav * productAdjMulti
-        
+        self.cUpperThres = cUpperThres
+        self.cDecayBase = cDecayBase
+        self.cControlThres = cControlThres
 
-        self.typeA = typeA
+        self.noiseRateBetaDp = noiseRateBetaDp
+        self.noiseMultiAdj = np.sqrt(2 * self.noiseRateBetaDp)
+
+        productAdjMulti = boundaryLength**2 / cellNumInLine**2
+        self.productRateBetac = productRateBetac * productAdjMulti
+        
         self.tqdm = tqdm
         self.savePath = savePath
         self.shotsnaps = shotsnaps
@@ -409,184 +397,151 @@ class PathPlanningGS(PatternFormation):
         self.randomSeed = randomSeed
         self.overWrite = overWrite
 
-        self.u = u0 / 2 + np.random.rand(cellNumInLine, cellNumInLine) * u0
-        self.v = v0 / 2 + np.random.rand(cellNumInLine, cellNumInLine) * v0
-        self.chemoAlphaU = chemoAlphaU
-        self.chemoAlphaV = chemoAlphaV
+        self.c = np.zeros((cellNumInLine, cellNumInLine))
+        self.chemoAlphaC = chemoAlphaC
 
         self.temp = dict()
         # The order of variable definitions has a dependency relationship
         self.temp["ocsiIdx"] = (self.positionX / self.dx).round().astype(int)
         self.temp["nodeIdx"] = (self.nodePosition / self.dx).round().astype(int)
-        self.temp["productDelta"] = self.calc_product_delta(idxKey="ocsiIdx")
         if len(nodePosition) > 0:
             self.temp["productDeltaNode"] = self.calc_product_delta(idxKey="nodeIdx") 
         else:
             self.temp["productDeltaNode"] = np.zeros((cellNumInLine, cellNumInLine))
-        self.temp["dotU"] = self.dotU
-        self.temp["dotV"] = self.dotV
-
-    def plot(self, ax: plt.Axes = None):
-        if ax is None:
-            _, ax = plt.subplots(figsize=(6, 6))
-        for i in range(self.agentsNum):
-            ax.add_artist(plt.Circle(
-                self.positionX[i], self.diameter / 2 * 0.95, zorder=1, 
-                facecolor="#F8B08E", edgecolor="black"
-                # color=colors[i]
-            ))
-        dotPosition = self.dotPosition
-        unitDir = dotPosition / np.linalg.norm(dotPosition, axis=1)[:, None]
-        ax.quiver(
-            self.positionX[:, 0], self.positionX[:, 1], unitDir[:, 0], unitDir[:, 1],
-            color="#F16623",
-            width=0.004, scale=50
-        )
-        ax.set_xlim(0, self.boundaryLength)
-        ax.set_ylim(0, self.boundaryLength)
 
     @property
-    def nablaU(self):
+    def nablaC(self):
         return - np.array([ 
-            (np.roll(self.u, -1, axis=0) - np.roll(self.u, 1, axis=0)),
-            (np.roll(self.u, -1, axis=1) - np.roll(self.u, 1, axis=1))
+            (np.roll(self.c, -1, axis=0) - np.roll(self.c, 1, axis=0)),
+            (np.roll(self.c, -1, axis=1) - np.roll(self.c, 1, axis=1))
         ]).transpose(1, 2, 0) / (2 * self.dx)
     
-    @property
-    def nablaV(self):
-        return - np.array([ 
-            (np.roll(self.v, -1, axis=0) - np.roll(self.v, 1, axis=0)),
-            (np.roll(self.v, -1, axis=1) - np.roll(self.v, 1, axis=1))
-        ]).transpose(1, 2, 0) / (2 * self.dx)
+    @staticmethod
+    @nb.njit
+    def _product_c(cellNumInLine: int, ocsiIdx: np.ndarray, productRateK0: np.ndarray, meaning: bool = False):
+        
+        productC = np.zeros((cellNumInLine, cellNumInLine), dtype=np.float64)
+        counts = np.zeros((cellNumInLine, cellNumInLine), dtype=np.int32)
 
-    def calc_product_delta(self, idxKey: str):
-        return self._product_c(self.cellNumInLine, self.temp[idxKey], 1)
+        for i, idx in enumerate(ocsiIdx):
+            productC[idx[0], idx[1]] = productC[idx[0], idx[1]] + productRateK0[i]
+            counts[idx[0], idx[1]] = counts[idx[0], idx[1]] + 1
+        if meaning:
+            counts = np.where(counts == 0, 1, counts)
+            productC = productC / counts
 
-    @property
-    def productU(self):
-        return (
-            self.temp["productDelta"] * self.productRateKu + 
-            self.temp["productDeltaNode"] * self.productRateBetau
-        )
+        return productC
     
     @property
-    def productV(self):
-        return (
-            self.temp["productDelta"] * self.productRateKv + 
-            self.temp["productDeltaNode"] * self.productRateBetav
-        )
+    def productC(self):
+        return self.temp["productDeltaNode"] * self.productRateBetac
     
     @property
-    def nabla2U(self):
-        center = -self.u
-        direct_neighbors = 0.20 * (
-            np.roll(self.u, 1, axis=0)
-            + np.roll(self.u, -1, axis=0)
-            + np.roll(self.u, 1, axis=1)
-            + np.roll(self.u, -1, axis=1)
-        )
-        diagonal_neighbors = 0.05 * (
-            np.roll(np.roll(self.u, 1, axis=0), 1, axis=1)
-            + np.roll(np.roll(self.u, -1, axis=0), 1, axis=1)
-            + np.roll(np.roll(self.u, -1, axis=0), -1, axis=1)
-            + np.roll(np.roll(self.u, 1, axis=0), -1, axis=1)
-        )
+    def dotC(self):
+        localState = self._product_c(self.cellNumInLine, self.temp["ocsiIdx"], self.internalState, meaning=False)
+        return (
+            self.diffusionRateDc * self.nabla2C
+            - self.decayRateKc * (self.cDecayBase - localState) * self.c
+            + self.productC
+        ) * (self.cUpperThres - self.c)
+    
+    @property
+    def dotInternalState(self):
+        localC = self.c[self.temp["ocsiIdx"][:, 0], self.temp["ocsiIdx"][:, 1]]
+        return self.internalState * (1 - self.internalState) * (localC - self.cControlThres)
 
-        out_array = center + direct_neighbors + diagonal_neighbors
-        return out_array / (self.dx ** 2)
-    
-    @property
-    def nabla2V(self):
-        center = -self.v
-        direct_neighbors = 0.20 * (
-            np.roll(self.v, 1, axis=0)
-            + np.roll(self.v, -1, axis=0)
-            + np.roll(self.v, 1, axis=1)
-            + np.roll(self.v, -1, axis=1)
-        )
-        diagonal_neighbors = 0.05 * (
-            np.roll(np.roll(self.v, 1, axis=0), 1, axis=1)
-            + np.roll(np.roll(self.v, -1, axis=0), 1, axis=1)
-            + np.roll(np.roll(self.v, -1, axis=0), -1, axis=1)
-            + np.roll(np.roll(self.v, 1, axis=0), -1, axis=1)
-        )
-
-        out_array = center + direct_neighbors + diagonal_neighbors
-        return out_array / (self.dx ** 2)
-    
-    @property
-    def diffusionU(self):
-        return self.diffusionRateDu * self.nabla2U
-    
-    @property
-    def diffusionV(self):
-        return self.diffusionRateDv * self.nabla2V
-    
-    @property
-    def dotU(self):
-        return (
-            self.diffusionU
-            - self.u * self.v**2
-            + self.decayRateKf * (1 - self.u) 
-            + self.productU
-        )
-    
-    @property
-    def dotV(self):
-        return (
-            self.diffusionV
-            + self.u * self.v**2
-            - self.v * self.decayRateKd 
-            + self.productV
-        )
-    
     @property
     def localGradient(self):
-        localGradU = self.nablaU[self.temp["ocsiIdx"][:, 0], self.temp["ocsiIdx"][:, 1]]
-        localGradV = self.nablaV[self.temp["ocsiIdx"][:, 0], self.temp["ocsiIdx"][:, 1]]
-        return self.chemoAlphaU * localGradU + self.chemoAlphaV * localGradV
+        localGradC = self.nablaC[self.temp["ocsiIdx"][:, 0], self.temp["ocsiIdx"][:, 1]]
+        return self.chemoAlphaC * localGradC
 
     @property
-    def dotPosition(self):
-        if self.diameter == 0:
-            return self.localGradient
-        else:
-            return self.shortRepulsion + self.localGradient
+    def spatialNoise(self):
+        noise = self.noiseMultiAdj * np.random.normal(
+            loc=0, scale=1, size=(self.agentsNum, 2)
+        )
+        return noise
+
+    @staticmethod
+    @nb.njit
+    def _short_rep(positionX: np.ndarray, diameter: float,
+                   halfBoundaryLength: float, boundaryLength: float, 
+                   power: float, cutOff: bool):
+        if not cutOff:
+            diameter = np.inf
+        rep = np.zeros(positionX.shape)
+        for i in range(positionX.shape[0]):
+            neighborPos: np.ndarray = positionX[
+                (np.abs(positionX[:, 0] - positionX[i, 0]) % halfBoundaryLength < diameter)
+                & (np.abs(positionX[:, 1] - positionX[i, 1]) % halfBoundaryLength < diameter)
+                & ((positionX[:,0] != positionX[i,0]) | (positionX[:, 1] != positionX[i, 1]))
+            ]
+            if neighborPos.shape[0]== 0:
+                continue
+            subX = positionX[i] - neighborPos
+            deltaX =(
+                subX * (-halfBoundaryLength<= subX) * (subX<= halfBoundaryLength) + 
+                (subX + boundaryLength) * (subX < -halfBoundaryLength)+
+                (subX - boundaryLength) * (subX > halfBoundaryLength)
+            )
+            distance = np.sqrt(deltaX[:, 0] ** 2 + deltaX[:,1] ** 2).reshape(-1, 1)
+            if cutOff:            
+                rep[i] = np.sum(deltaX / distance ** power * (distance < diameter), axis=0)
+            else:
+                rep[i] = np.sum(deltaX / distance ** power, axis=0)
+
+        return rep
+
+    @property
+    def shortRepulsion(self):
+        return self._short_rep(
+            self.positionX, self.diameter,
+            self.halfBoundaryLength, self.boundaryLength, 
+            self.repelPower, self.repCutOff
+        )
+
+    def calc_product_delta(self, idxKey: str):
+        if idxKey == "ocsiIdx":
+            return self._product_c(self.cellNumInLine, self.temp[idxKey], self.temp["neighborsNum"])
+        else:  # nodeIdx
+            return self._product_c(self.cellNumInLine, self.temp[idxKey], np.ones(self.agentsNum))
 
     def update(self):
         self.temp["ocsiIdx"] = (self.positionX / self.dx).round().astype(int)
-        self.temp["productDelta"] = self.calc_product_delta(idxKey="ocsiIdx")
-        dotPosition = self.dotPosition
-        dotU = self.dotU
-        dotV = self.dotV
+        shortRepulsion = self.shortRepulsion
+        if self.diameter == 0:
+            dotPosition = self.localGradient + self.spatialNoise
+        else:
+            dotPosition = self.localGradient + self.spatialNoise + shortRepulsion
+        dotInternalState = self.dotInternalState
+        dotC = self.dotC
         
         self.positionX = np.mod(
             self.positionX + dotPosition * self.dt, 
             self.boundaryLength
         )
-        self.u += dotU * self.dt
-        self.v += dotV * self.dt
-        self.u[self.u < 0] = 0
-        self.v[self.v < 0] = 0
+        self.internalState += dotInternalState * self.dt
+        self.c += dotC * self.dt
+        self.c[self.c < 0] = 0
 
     def append(self):
         if self.store is not None:
             if self.counts % self.shotsnaps != 0:
                 return
             self.store.append(key="positionX", value=pd.DataFrame(self.positionX))
-            self.store.append(key="u", value=pd.DataFrame(self.u))
-            self.store.append(key="v", value=pd.DataFrame(self.v))
+            self.store.append(key="internalState", value=pd.DataFrame(self.internalState))
+            self.store.append(key="c", value=pd.DataFrame(self.c))
 
     def __str__(self) -> str:
-            
         name =  (
             f"PPGS"
-            f"_Bu{self.productRateBetau:.3f}_Bv{self.productRateBetav:.3f}"
-            f"_Au{self.chemoAlphaU:.1f}_Av{self.chemoAlphaV:.1f}"
-            f"_pu{self.productRateKu:.3f}_pv{self.productRateKv:.3f}"
-            f"_Kd{self.decayRateKd:.2f}_Kf{self.decayRateKf:.2f}"
-            f"_d{self.diameter:.1f}"
-            f"_Du{self.diffusionRateDu:.3f}_Dv{self.diffusionRateDv:.3f}"
+            f"_bC{self.productRateBetac:.3f}_kC{self.decayRateKc:.3f}_Dc{self.diffusionRateDc:.3f}"
+            f"_cUT{self.cUpperThres:.3f}_cDB{self.cDecayBase:.3f}"
+            f"_cCT{self.cControlThres:.3f}_aC{self.chemoAlphaC:.3f}"
+            f"_d{self.diameter:.1f}_rep{self.repelPower:.1f}"
+            f"_cutoff{self.repCutOff}_noise{self.noiseRateBetaDp:.3f}"
+            f"_cell{self.cellNumInLine}_L{self.boundaryLength:.1f}"
+            f"_agents{self.agentsNum}_nodes{self.nodePosition.shape[0]}"
             f"_r{self.randomSeed}_dt{self.dt:.3f}"
         )
         
@@ -594,7 +549,7 @@ class PathPlanningGS(PatternFormation):
 
 
 class StateAnalysis:
-    def __init__(self, model: PathPlanningGS = None, classDistance: float = 2, 
+    def __init__(self, model: PathPlanningGSC = None, classDistance: float = 2, 
                  lookIndex: int = -1, showTqdm: bool = False):
         
         self.classDistance = classDistance
