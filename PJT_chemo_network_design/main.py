@@ -349,15 +349,12 @@ class PatternFormation(Swarmalators2D):
 class PathPlanningGSC(PatternFormation):
     def __init__(self, 
                  nodePosition: np.ndarray, 
-                 productRateBetac: float,
-                 cUpperThres: float = 3, cDecayBase: float = 0.8, cControlThres: float = 0.5,
-                 boundaryLength: float = 100, noiseRateBetaDp: float = 0.1,
-                 decayRateKc: float = 1,
-                 diameter: float = 0.1, 
-                 repelPower: float = 1, repCutOff: bool = True,
-                 chemoAlphaC: float = 1,
-                 diffusionRateDc: float = 1,
-                 cellNumInLine: int = 100, 
+                 productRateBetac: float, decayRateKc: float = 1, diffusionRateDc: float = 1,
+                #  cUpperThres: float = 3, 
+                 cDecayBase: float = 0.8, cControlThres: float = 0.5,
+                 noiseRateBetaDp: float = 0.1, initialState: float = 0.5, chemoAlphaC: float = 1,
+                 diameter: float = 0.1, repelPower: float = 1, repCutOff: bool = True, deltaSpread: bool = False,
+                 cellNumInLine: int = 100, boundaryLength: float = 100, 
                  agentsNum: int=1000, dt: float=0.01, 
                  tqdm: bool = False, savePath: str = None, shotsnaps: int = 10, 
                  randomSeed: int = 10, overWrite: bool = False) -> None:
@@ -366,8 +363,10 @@ class PathPlanningGSC(PatternFormation):
 
         np.random.seed(randomSeed)
         self.nodePosition = nodePosition
-        self.positionX = np.random.random((agentsNum, 2)) * boundaryLength
-        self.internalState = np.ones(agentsNum) * 0.5
+        # self.positionX = np.random.random((agentsNum, 2)) * boundaryLength / 4 * 3 + boundaryLength / 8
+        self.positionX = np.random.random((agentsNum, 2)) * boundaryLength / 4 + boundaryLength / 8 * 3
+        self.initialState = initialState
+        self.internalState = np.ones(agentsNum) * initialState
         self.cellNumInLine = cellNumInLine
         self.cPosition = np.array(list(product(np.linspace(0, boundaryLength, cellNumInLine), repeat=2)))
         self.dx = boundaryLength / (cellNumInLine - 1)
@@ -378,15 +377,21 @@ class PathPlanningGSC(PatternFormation):
         self.diameter = diameter
         self.repelPower = repelPower
         self.repCutOff = repCutOff
-        self.cUpperThres = cUpperThres
+        # self.cUpperThres = cUpperThres
         self.cDecayBase = cDecayBase
         self.cControlThres = cControlThres
+        self.deltaSpread = deltaSpread
+        self.spreadNum = int(np.round((np.round(self.diameter / self.dx) - 1) / 2))
 
         self.noiseRateBetaDp = noiseRateBetaDp
         self.noiseMultiAdj = np.sqrt(2 * self.noiseRateBetaDp)
 
-        productAdjMulti = boundaryLength**2 / cellNumInLine**2
-        self.productRateBetac = productRateBetac * productAdjMulti
+        if deltaSpread:
+            productAdjMulti = boundaryLength**2 / (cellNumInLine * (1 + 2 * self.spreadNum))**2
+        else:
+            productAdjMulti = boundaryLength**2 / cellNumInLine**2
+        self.productRateBetac = productRateBetac
+        self._productRateBetac = productRateBetac * productAdjMulti
         
         self.tqdm = tqdm
         self.savePath = savePath
@@ -418,14 +423,18 @@ class PathPlanningGSC(PatternFormation):
     
     @staticmethod
     @nb.njit
-    def _product_c(cellNumInLine: int, ocsiIdx: np.ndarray, productRateK0: np.ndarray, meaning: bool = False):
+    def _product_c(cellNumInLine: int, ocsiIdx: np.ndarray, productRateK0: np.ndarray, 
+                   meaning: bool = False, spreadNum: int = 0):
         
         productC = np.zeros((cellNumInLine, cellNumInLine), dtype=np.float64)
         counts = np.zeros((cellNumInLine, cellNumInLine), dtype=np.int32)
 
         for i, idx in enumerate(ocsiIdx):
-            productC[idx[0], idx[1]] = productC[idx[0], idx[1]] + productRateK0[i]
-            counts[idx[0], idx[1]] = counts[idx[0], idx[1]] + 1
+            for j in range(-spreadNum, 1 + spreadNum):
+                for k in range(-spreadNum, 1 + spreadNum):
+                    newIdx = (idx[0] + j) % cellNumInLine, (idx[1] + k) % cellNumInLine
+                    productC[newIdx[0], newIdx[1]] += productRateK0[i]
+                    counts[newIdx[0], newIdx[1]] += 1
         if meaning:
             counts = np.where(counts == 0, 1, counts)
             productC = productC / counts
@@ -434,16 +443,18 @@ class PathPlanningGSC(PatternFormation):
     
     @property
     def productC(self):
-        return self.temp["productDeltaNode"] * self.productRateBetac
+        return self.temp["productDeltaNode"] * self._productRateBetac
     
     @property
     def dotC(self):
-        localState = self._product_c(self.cellNumInLine, self.temp["ocsiIdx"], self.internalState, meaning=False)
+        localState = self._product_c(self.cellNumInLine, self.temp["ocsiIdx"], self.internalState, 
+                                     meaning=False, spreadNum=self.spreadNum)
+        localState = np.clip(localState, 0, 1)
         return (
             self.diffusionRateDc * self.nabla2C
             - self.decayRateKc * (self.cDecayBase - localState) * self.c
             + self.productC
-        ) * (self.cUpperThres - self.c)
+        ) # * (self.cUpperThres - self.c)
     
     @property
     def dotInternalState(self):
@@ -502,7 +513,7 @@ class PathPlanningGSC(PatternFormation):
 
     def calc_product_delta(self, idxKey: str):
         if idxKey == "ocsiIdx":
-            return self._product_c(self.cellNumInLine, self.temp[idxKey], self.temp["neighborsNum"])
+            return self._product_c(self.cellNumInLine, self.temp[idxKey], self.temp["neighborsNum"], spreadNum=self.spreadNum)
         else:  # nodeIdx
             return self._product_c(self.cellNumInLine, self.temp[idxKey], np.ones(self.agentsNum))
 
@@ -536,9 +547,35 @@ class PathPlanningGSC(PatternFormation):
         name =  (
             f"PPGS"
             f"_bC{self.productRateBetac:.3f}_kC{self.decayRateKc:.3f}_Dc{self.diffusionRateDc:.3f}"
-            f"_cUT{self.cUpperThres:.3f}_cDB{self.cDecayBase:.3f}"
-            f"_cCT{self.cControlThres:.3f}_aC{self.chemoAlphaC:.3f}"
-            f"_d{self.diameter:.1f}_rep{self.repelPower:.1f}"
+            # f"_cUT{self.cUpperThres:.3f}"
+            f"_cDB{self.cDecayBase:.3f}"
+            f"_cCT{self.cControlThres:.3f}_aC{self.chemoAlphaC:.3f}_initS{self.initialState:.2f}"
+            f"_d{self.diameter:.1f}_rep{self.repelPower:.1f}_delSp{self.deltaSpread}"
+            f"_cutoff{self.repCutOff}_noise{self.noiseRateBetaDp:.3f}"
+            f"_cell{self.cellNumInLine}_L{self.boundaryLength:.1f}"
+            f"_agents{self.agentsNum}_nodes{self.nodePosition.shape[0]}"
+            f"_r{self.randomSeed}_dt{self.dt:.3f}"
+        )
+        
+        return name
+    
+
+class PathPlanningGSCD(PathPlanningGSC):
+    @property
+    def localGradient(self):
+        localGradC = self.nablaC[self.temp["ocsiIdx"][:, 0], self.temp["ocsiIdx"][:, 1]]
+        localDiffAbs = np.abs(self.nabla2C[self.temp["ocsiIdx"][:, 0], self.temp["ocsiIdx"][:, 1]])[:, np.newaxis]
+        # print(f"localGradC: {localGradC.shape}, localDiffAbs: {localDiffAbs.shape}")
+        return self.chemoAlphaC * localGradC * localDiffAbs
+    
+    def __str__(self) -> str:
+        name =  (
+            f"PPGSCD"
+            f"_bC{self.productRateBetac:.3f}_kC{self.decayRateKc:.3f}_Dc{self.diffusionRateDc:.3f}"
+            # f"_cUT{self.cUpperThres:.3f}"
+            f"_cDB{self.cDecayBase:.3f}"
+            f"_cCT{self.cControlThres:.3f}_aC{self.chemoAlphaC:.3f}_initS{self.initialState:.2f}"
+            f"_d{self.diameter:.1f}_rep{self.repelPower:.1f}_delSp{self.deltaSpread}"
             f"_cutoff{self.repCutOff}_noise{self.noiseRateBetaDp:.3f}"
             f"_cell{self.cellNumInLine}_L{self.boundaryLength:.1f}"
             f"_agents{self.agentsNum}_nodes{self.nodePosition.shape[0]}"
@@ -560,32 +597,24 @@ class StateAnalysis:
             self.model = model
             targetPath = f"{self.model.savePath}/{self.model}.h5"
             totalPositionX = pd.read_hdf(targetPath, key="positionX")
-            totalU = pd.read_hdf(targetPath, key="u")
-            totalV = pd.read_hdf(targetPath, key="v")
+            totalInternalState = pd.read_hdf(targetPath, key="internalState")
+            totalC = pd.read_hdf(targetPath, key="c")
             
             TNum = totalPositionX.shape[0] // self.model.agentsNum
             self.TNum = TNum
             self.totalPositionX = totalPositionX.values.reshape(TNum, self.model.agentsNum, 2)
-            self.totalU = totalU.values.reshape(TNum, model.cellNumInLine, model.cellNumInLine)
-            self.totalV = totalV.values.reshape(TNum, model.cellNumInLine, model.cellNumInLine)
-            self.maxC1 = totalU.values.max()
-            self.maxC2 = totalV.values.max()
-            self.minC1 = totalU.values.min()
-            self.minC2 = totalV.values.min()
-
-        colors = [(1, 1, 1, 0), (0.95, 0.4 , 0.14, 0.9)]
-        cmap1 = mcolors.LinearSegmentedColormap.from_list("my_colormap", colors)
-        cmap1.set_bad(color=(1, 1, 1, 0))
-        self.c1Maps = cmap1
-        colors = [(1, 1, 1, 0), (0.29, 0.7, 0.7, 0.9)]
-        cmap2 = mcolors.LinearSegmentedColormap.from_list("my_colormap", colors)
-        cmap2.set_bad(color=(1, 1, 1, 0))
-        self.c2Maps = cmap2
+            self.totalInternalState = totalInternalState.values.reshape(TNum, self.model.agentsNum)
+            self.totalC = totalC.values.reshape(TNum, model.cellNumInLine, model.cellNumInLine)
+            
+            self.maxC = self.totalC.max()
+            self.minC = self.totalC.min()
 
     def get_state(self, index: int = -1):
         positionX = self.totalPositionX[index]
+        internalState = self.totalInternalState[index]
+        c = self.totalC[index]
 
-        return positionX
+        return positionX, internalState, c
 
     def adj_distance(self, positionX, others):
         return self._adj_distance(
