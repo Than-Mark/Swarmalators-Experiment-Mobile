@@ -389,14 +389,14 @@ class PatternFormation(Swarmalators2D):
 class PathPlanningGSC(PatternFormation):
     def __init__(self, 
                  nodePosition: np.ndarray, 
-                 productRateBetac: float, decayRateKc: float = 1, 
+                 productRateBetac: float = 1, decayRateKc: float = 0.001, 
                  diffusionRateDc: float = 1, convectionVc: float = 1, 
                  cDecayBase: float = 0.8, cControlThres: float = 0.5,
-                 noiseRateBetaDp: float = 0.1, initialState: float = 0.5, chemoAlphaC: float = 1,
-                 diameter: float = 0.1, repelPower: float = 1, repCutOff: bool = True, deltaSpread: bool = False,
-                 cellNumInLine: int = 100, boundaryLength: float = 100, 
-                 agentsNum: int=1000, dt: float=0.01, 
-                 tqdm: bool = False, savePath: str = None, shotsnaps: int = 10, 
+                 noiseRateBetaDp: float = 0.1, initialState: float = 0., chemoAlphaC: float = 1,
+                 diameter: float = 3, repelPower: float = 2, repCutOff: bool = True, deltaSpread: bool = False,
+                 cellNumInLine: int = 200, boundaryLength: float = 200, 
+                 agentsNum: int=1000, dt: float=0.1, 
+                 tqdm: bool = False, savePath: str = None, shotsnaps: int = 100, 
                  randomSeed: int = 10, overWrite: bool = False) -> None:
 
         self.halfAgentsNum = agentsNum // 2
@@ -405,9 +405,13 @@ class PathPlanningGSC(PatternFormation):
         self.nodePosition = nodePosition
         # self.positionX = np.random.random((agentsNum, 2)) * boundaryLength / 4 * 3 + boundaryLength / 8
         # self.positionX = np.random.random((agentsNum, 2)) * boundaryLength / 2 + boundaryLength / 4
-        self.positionX = np.random.random((agentsNum, 2)) * boundaryLength / 4 + boundaryLength / 8 * 3
+        # self.positionX = np.random.random((agentsNum, 2)) * boundaryLength / 4 + boundaryLength / 8 * 3
+        self.positionX = np.random.random((agentsNum, 2)) * boundaryLength
         self.initialState = initialState
-        self.internalState = np.ones(agentsNum) * initialState
+        if initialState is None:
+            self.internalState = np.random.rand(agentsNum) * 2 - 1
+        else:
+            self.internalState = np.ones(agentsNum) * initialState
         self.cellNumInLine = cellNumInLine
         self.cPosition = np.array(list(product(np.linspace(0, boundaryLength, cellNumInLine), repeat=2)))
         self.dx = boundaryLength / (cellNumInLine - 1)
@@ -422,7 +426,7 @@ class PathPlanningGSC(PatternFormation):
         self.cDecayBase = cDecayBase
         self.cControlThres = cControlThres
         self.deltaSpread = deltaSpread
-        self.spreadNum = int(np.round((np.round(self.diameter / self.dx) - 1) / 2))
+        self.spreadNum = int(np.round((self.diameter / self.dx - 1) / 2))
 
         self.noiseRateBetaDp = noiseRateBetaDp
         self.noiseMultiAdj = np.sqrt(2 * self.noiseRateBetaDp)
@@ -567,7 +571,8 @@ class PathPlanningGSC(PatternFormation):
 
     def calc_product_delta(self, idxKey: str):
         if idxKey == "ocsiIdx":
-            return self._product_c(self.cellNumInLine, self.temp[idxKey], self.temp["neighborsNum"], spreadNum=self.spreadNum)
+            return self._product_c(self.cellNumInLine, self.temp[idxKey], self.temp["neighborsNum"], 
+                                   meaning=False, spreadNum=self.spreadNum)
         else:  # nodeIdx
             return self._product_c(self.cellNumInLine, self.temp[idxKey], np.ones(self.agentsNum))
 
@@ -612,6 +617,66 @@ class PathPlanningGSC(PatternFormation):
         )
         
         return name
+    
+
+class PathPlanningGSCA(PathPlanningGSC):
+    def __init__(self, nodePosition, productRateBetac = 1, decayRateKc = 0.001, 
+                 diffusionRateDc = 1, convectionVc = 1, 
+                 cDecayBase = 0.8, cControlThres = 0.5, 
+                 initialState = None, 
+                 stateSenseSpeed: float = 0.1, senseDistence: float = 20,
+                 noiseRateBetaDp = 0.1, chemoAlphaC = 1, 
+                 diameter = 3, repelPower = 2, repCutOff = True, deltaSpread = False, 
+                 cellNumInLine = 200, boundaryLength = 200, 
+                 agentsNum = 1000, dt = 0.1, 
+                 tqdm = False, savePath = None, shotsnaps = 100, 
+                 randomSeed = 10, overWrite = False):
+        super().__init__(nodePosition, productRateBetac, decayRateKc, diffusionRateDc, convectionVc, cDecayBase, cControlThres, noiseRateBetaDp, initialState, chemoAlphaC, diameter, repelPower, repCutOff, deltaSpread, cellNumInLine, boundaryLength, agentsNum, dt, tqdm, savePath, shotsnaps, randomSeed, overWrite)
+        
+        if initialState is None:
+            self.internalState = np.random.choice([-0.99, 0.99], size=nodePosition.shape[0], p=[0.5, 0.5])
+        else:
+            self.internalState = np.ones(nodePosition.shape[0]) * initialState
+
+        self.stateSenseSpeed = stateSenseSpeed
+        self.senseDistence = senseDistence
+        self.senseSpreadNum = int(np.round((self.senseDistence / self.dx - 1) / 2))
+
+    def __str__(self) -> str:
+        name =  (
+            f"PPGA"
+            f"_bC{self.productRateBetac:.3f}_kC{self.decayRateKc:.3f}_Dc{self.diffusionRateDc:.3f}"
+            f"_sD{self.senseDistence:.1f}_sSS{self.stateSenseSpeed:.3f}"
+            f"_cDB{self.cDecayBase:.3f}"
+            f"_cCT{self.cControlThres:.3f}_aC{self.chemoAlphaC:.3f}"
+            f"_initS{self.initialState:.2f}" if self.initialState is not None else ""
+            f"_d{self.diameter:.1f}_rep{self.repelPower:.1f}_delSp{self.deltaSpread}"
+            f"_cutoff{self.repCutOff}_noise{self.noiseRateBetaDp:.3f}"
+            f"_cell{self.cellNumInLine}_L{self.boundaryLength:.1f}"
+            f"_agents{self.agentsNum}_nodes{self.nodePosition.shape[0]}"
+            f"_r{self.randomSeed}_dt{self.dt:.3f}"
+        )
+        
+        return name
+
+    @property
+    def dotC(self):
+        productC = self._product_c(self.cellNumInLine, self.temp["nodeIdx"], self.internalState,
+                                   meaning=False, spreadNum=self.spreadNum)
+        return (
+            self.diffusionRateDc * self.nabla2C
+            - self.decayRateKc * self.c
+            + productC
+        )
+    
+    @property
+    def dotInternalState(self):
+        globalSenseCounts = self._product_c(
+            self.cellNumInLine, self.temp["ocsiIdx"], np.ones(self.agentsNum),
+            meaning=False, spreadNum=self.senseSpreadNum
+        )
+        localCounts = globalSenseCounts[self.temp["nodeIdx"][:, 0], self.temp["nodeIdx"][:, 1]]
+        return self.stateSenseSpeed * (1 + self.internalState) * (1 - self.internalState) * (3 - localCounts)
 
 
 class StateAnalysis:
@@ -632,7 +697,7 @@ class StateAnalysis:
             TNum = totalPositionX.shape[0] // self.model.agentsNum
             self.TNum = TNum
             self.totalPositionX = totalPositionX.values.reshape(TNum, self.model.agentsNum, 2)
-            self.totalInternalState = totalInternalState.values.reshape(TNum, self.model.agentsNum)
+            self.totalInternalState = totalInternalState.values.reshape(TNum, self.model.nodePosition.shape[0])
             self.totalC = totalC.values.reshape(TNum, model.cellNumInLine, model.cellNumInLine)
             
             self.maxC = self.totalC[-1].max()

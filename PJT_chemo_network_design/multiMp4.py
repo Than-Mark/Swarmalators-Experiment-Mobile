@@ -49,28 +49,27 @@ from main import *
 from multiprocessing import Pool
 import pandas as pd
 
-SAVE_PATH = r"E:\MS_ExperimentData\general"
-MP4_PATH = r"E:\MS_ExperimentData\mp4"
-MP4_TEMP_PATH = r"E:\MS_ExperimentData\mp4_temp"
+# SAVE_PATH = r"E:\MS_ExperimentData\general"
+# MP4_PATH = r"E:\MS_ExperimentData\mp4"
+# MP4_TEMP_PATH = r"E:\MS_ExperimentData\mp4_temp"
+
+SAVE_PATH = r"D:\MS_ExperimentData\general"
+MP4_PATH = r"D:\MS_ExperimentData\mp4"
+MP4_TEMP_PATH = r"D:\MS_ExperimentData\mp4_temp"
 
 
 def draw_frame(sa: StateAnalysis):
     idx = sa.index
-    positionX, internalState, c = sa.get_state(-1)
+    positionX, _, c = sa.get_state(-1)
     
     fig, axs = plt.subplots(1, 2, figsize=(14, 6))
-
-    stateColors = cmap(internalState)
 
     for i in range(sa.model.agentsNum):
         axs[0].add_artist(plt.Circle(
             positionX[i], sa.model.diameter / 2 * 0.95, zorder=1, 
-            # facecolor="#9BD5D5", edgecolor="black"
-            facecolor=stateColors[i], edgecolor="black"
+            facecolor="#9BD5D5", edgecolor="black"
+            # facecolor=stateColors[i], edgecolor="black"
         ))
-    sc = plt.scatter(np.full_like(internalState, -1), np.full_like(internalState, -1), 
-                    c=sa.model.internalState, cmap=cmap, vmin=0, vmax=1)
-    plt.colorbar(sc, ax=axs[0], label=r"Internal State ($s_i$)")
     
     for ax in axs:
         ax.set_xlim(0, sa.model.boundaryLength)
@@ -99,24 +98,11 @@ if __name__ == "__main__":
         [100 - pathShift, 100], [100 + pathShift, 100]
     ])
 
-    # nodes = pd.read_parquet("Washington_Metrorail.parquet")
-    # nodePosition = nodes[["lon", "lat"]].values
-    # center = 100
-    # patternHalfLength = 75
-    # nodePosition = nodePosition - np.min(nodePosition, axis=0)
-    # nodePosition = nodePosition / np.max(nodePosition, axis=0) * patternHalfLength * 2 + center - patternHalfLength
-
-    model = PathPlanningGSC(
-        nodePosition=nodePosition,
-        # nodePosition=np.array([]),
-        productRateBetac=1, decayRateKc=0.001, 
-        diffusionRateDc=1, convectionVc=0, 
-        cDecayBase=1, cControlThres=0.05,
-        noiseRateBetaDp=0., initialState=1, chemoAlphaC=-5,
-        diameter=3, repelPower=2, repCutOff=True, deltaSpread=True,
-        cellNumInLine=200, boundaryLength=200, agentsNum=200,
-        tqdm=True, dt=0.1, savePath=SAVE_PATH, shotsnaps=100, overWrite=True
-    )
+    model = PathPlanningGSCA(nodePosition, agentsNum=200, chemoAlphaC=-5,
+                         initialState=None, 
+                         stateSenseSpeed=0.01, senseDistence=50,
+                         noiseRateBetaDp=0,
+                         tqdm=True, savePath=SAVE_PATH, overWrite=True)
 
 
     sa = StateAnalysis(model)
