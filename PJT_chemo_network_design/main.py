@@ -69,6 +69,8 @@ class PatternFormation(Swarmalators2D):
         self.positionX = np.random.random((agentsNum, 2)) * boundaryLength
         self.phaseTheta = np.random.random(agentsNum) * 2 * np.pi - np.pi
         self.c = np.random.rand(cellNumInLine, cellNumInLine)
+        self.u = np.random.rand(cellNumInLine, cellNumInLine)
+        self.v = np.random.rand(cellNumInLine, cellNumInLine)
         self.cellNumInLine = cellNumInLine
         self.cPosition = np.array(list(product(np.linspace(0, boundaryLength, cellNumInLine), repeat=2)))
         self.dx = boundaryLength / (cellNumInLine - 1)
@@ -195,6 +197,44 @@ class PatternFormation(Swarmalators2D):
         out_array = center + direct_neighbors + diagonal_neighbors
         return out_array / (self.dx ** 2)
     
+    @property
+    def nabla2U(self):
+        center = -self.u
+        direct_neighbors = 0.20 * (
+            np.roll(self.u, 1, axis=0)
+            + np.roll(self.u, -1, axis=0)
+            + np.roll(self.u, 1, axis=1)
+            + np.roll(self.u, -1, axis=1)
+        )
+        diagonal_neighbors = 0.05 * (
+            np.roll(np.roll(self.u, 1, axis=0), 1, axis=1)
+            + np.roll(np.roll(self.u, -1, axis=0), 1, axis=1)
+            + np.roll(np.roll(self.u, -1, axis=0), -1, axis=1)
+            + np.roll(np.roll(self.u, 1, axis=0), -1, axis=1)
+        )
+
+        out_array = center + direct_neighbors + diagonal_neighbors
+        return out_array / (self.dx ** 2)
+    
+    @property
+    def nabla2V(self):
+        center = -self.v
+        direct_neighbors = 0.20 * (
+            np.roll(self.v, 1, axis=0)
+            + np.roll(self.v, -1, axis=0)
+            + np.roll(self.v, 1, axis=1)
+            + np.roll(self.v, -1, axis=1)
+        )
+        diagonal_neighbors = 0.05 * (
+            np.roll(np.roll(self.v, 1, axis=0), 1, axis=1)
+            + np.roll(np.roll(self.v, -1, axis=0), 1, axis=1)
+            + np.roll(np.roll(self.v, -1, axis=0), -1, axis=1)
+            + np.roll(np.roll(self.v, 1, axis=0), -1, axis=1)
+        )
+
+        out_array = center + direct_neighbors + diagonal_neighbors
+        return out_array / (self.dx ** 2)
+
     @property
     def nablaC(self):
         return np.array([
@@ -349,8 +389,8 @@ class PatternFormation(Swarmalators2D):
 class PathPlanningGSC(PatternFormation):
     def __init__(self, 
                  nodePosition: np.ndarray, 
-                 productRateBetac: float, decayRateKc: float = 1, diffusionRateDc: float = 1,
-                #  cUpperThres: float = 3, 
+                 productRateBetac: float, decayRateKc: float = 1, 
+                 diffusionRateDc: float = 1, convectionVc: float = 1, 
                  cDecayBase: float = 0.8, cControlThres: float = 0.5,
                  noiseRateBetaDp: float = 0.1, initialState: float = 0.5, chemoAlphaC: float = 1,
                  diameter: float = 0.1, repelPower: float = 1, repCutOff: bool = True, deltaSpread: bool = False,
@@ -364,6 +404,7 @@ class PathPlanningGSC(PatternFormation):
         np.random.seed(randomSeed)
         self.nodePosition = nodePosition
         # self.positionX = np.random.random((agentsNum, 2)) * boundaryLength / 4 * 3 + boundaryLength / 8
+        # self.positionX = np.random.random((agentsNum, 2)) * boundaryLength / 2 + boundaryLength / 4
         self.positionX = np.random.random((agentsNum, 2)) * boundaryLength / 4 + boundaryLength / 8 * 3
         self.initialState = initialState
         self.internalState = np.ones(agentsNum) * initialState
@@ -377,7 +418,7 @@ class PathPlanningGSC(PatternFormation):
         self.diameter = diameter
         self.repelPower = repelPower
         self.repCutOff = repCutOff
-        # self.cUpperThres = cUpperThres
+        self.convectionVc = convectionVc
         self.cDecayBase = cDecayBase
         self.cControlThres = cControlThres
         self.deltaSpread = deltaSpread
@@ -450,11 +491,24 @@ class PathPlanningGSC(PatternFormation):
         localState = self._product_c(self.cellNumInLine, self.temp["ocsiIdx"], self.internalState, 
                                      meaning=False, spreadNum=self.spreadNum)
         localState = np.clip(localState, 0, 1)
+
+        diffX = self.positionX.mean(axis=0) - self.positionX
+        phi = np.arctan2(diffX[:, 1], diffX[:, 0])
+        localPhi = self._product_c(self.cellNumInLine, self.temp["ocsiIdx"], phi, 
+                                     meaning=False, spreadNum=self.spreadNum)
+
+        nablaC = self.nablaC
+
+        convection = self.convectionVc * localState * (
+            np.cos(localPhi) * nablaC[:, :, 0] + np.sin(localPhi) * nablaC[:, :, 1]
+        )
+
         return (
             self.diffusionRateDc * self.nabla2C
-            - self.decayRateKc * (self.cDecayBase - localState) * self.c
+            - convection
+            - self.decayRateKc * self.c
             + self.productC
-        ) # * (self.cUpperThres - self.c)
+        )
     
     @property
     def dotInternalState(self):
@@ -547,32 +601,7 @@ class PathPlanningGSC(PatternFormation):
         name =  (
             f"PPGS"
             f"_bC{self.productRateBetac:.3f}_kC{self.decayRateKc:.3f}_Dc{self.diffusionRateDc:.3f}"
-            # f"_cUT{self.cUpperThres:.3f}"
-            f"_cDB{self.cDecayBase:.3f}"
-            f"_cCT{self.cControlThres:.3f}_aC{self.chemoAlphaC:.3f}_initS{self.initialState:.2f}"
-            f"_d{self.diameter:.1f}_rep{self.repelPower:.1f}_delSp{self.deltaSpread}"
-            f"_cutoff{self.repCutOff}_noise{self.noiseRateBetaDp:.3f}"
-            f"_cell{self.cellNumInLine}_L{self.boundaryLength:.1f}"
-            f"_agents{self.agentsNum}_nodes{self.nodePosition.shape[0]}"
-            f"_r{self.randomSeed}_dt{self.dt:.3f}"
-        )
-        
-        return name
-    
-
-class PathPlanningGSCD(PathPlanningGSC):
-    @property
-    def localGradient(self):
-        localGradC = self.nablaC[self.temp["ocsiIdx"][:, 0], self.temp["ocsiIdx"][:, 1]]
-        localDiffAbs = np.abs(self.nabla2C[self.temp["ocsiIdx"][:, 0], self.temp["ocsiIdx"][:, 1]])[:, np.newaxis]
-        # print(f"localGradC: {localGradC.shape}, localDiffAbs: {localDiffAbs.shape}")
-        return self.chemoAlphaC * localGradC * localDiffAbs
-    
-    def __str__(self) -> str:
-        name =  (
-            f"PPGSCD"
-            f"_bC{self.productRateBetac:.3f}_kC{self.decayRateKc:.3f}_Dc{self.diffusionRateDc:.3f}"
-            # f"_cUT{self.cUpperThres:.3f}"
+            f"_cVc{self.convectionVc:.3f}"
             f"_cDB{self.cDecayBase:.3f}"
             f"_cCT{self.cControlThres:.3f}_aC{self.chemoAlphaC:.3f}_initS{self.initialState:.2f}"
             f"_d{self.diameter:.1f}_rep{self.repelPower:.1f}_delSp{self.deltaSpread}"
@@ -606,8 +635,8 @@ class StateAnalysis:
             self.totalInternalState = totalInternalState.values.reshape(TNum, self.model.agentsNum)
             self.totalC = totalC.values.reshape(TNum, model.cellNumInLine, model.cellNumInLine)
             
-            self.maxC = self.totalC.max()
-            self.minC = self.totalC.min()
+            self.maxC = self.totalC[-1].max()
+            self.minC = self.totalC[-1].min()
 
     def get_state(self, index: int = -1):
         positionX = self.totalPositionX[index]

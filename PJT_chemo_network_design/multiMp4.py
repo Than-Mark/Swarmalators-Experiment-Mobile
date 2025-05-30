@@ -99,13 +99,20 @@ if __name__ == "__main__":
         [100 - pathShift, 100], [100 + pathShift, 100]
     ])
 
-    model = PathPlanningGSCD(
+    # nodes = pd.read_parquet("Washington_Metrorail.parquet")
+    # nodePosition = nodes[["lon", "lat"]].values
+    # center = 100
+    # patternHalfLength = 75
+    # nodePosition = nodePosition - np.min(nodePosition, axis=0)
+    # nodePosition = nodePosition / np.max(nodePosition, axis=0) * patternHalfLength * 2 + center - patternHalfLength
+
+    model = PathPlanningGSC(
         nodePosition=nodePosition,
         # nodePosition=np.array([]),
-        productRateBetac=1, decayRateKc=0.001, diffusionRateDc=0.5,
-        # cUpperThres=1, 
-        cDecayBase=1, cControlThres=0.1,
-        noiseRateBetaDp=0., initialState=0., chemoAlphaC=-50000,
+        productRateBetac=1, decayRateKc=0.001, 
+        diffusionRateDc=1, convectionVc=0, 
+        cDecayBase=1, cControlThres=0.05,
+        noiseRateBetaDp=0., initialState=1, chemoAlphaC=-5,
         diameter=3, repelPower=2, repCutOff=True, deltaSpread=True,
         cellNumInLine=200, boundaryLength=200, agentsNum=200,
         tqdm=True, dt=0.1, savePath=SAVE_PATH, shotsnaps=100, overWrite=True
@@ -141,7 +148,7 @@ if __name__ == "__main__":
         'ffmpeg',
         '-framerate', str(fps),
         '-i', os.path.join(MP4_TEMP_PATH, "%d.png"),
-        '-vf', 'setpts=0.20*PTS',  
+        '-vf', 'setpts=0.20*PTS,scale=1360x580',  
         '-c:v', 'libx264',
         '-pix_fmt', 'yuv420p',
         rf"{MP4_PATH}/{model}.mp4"
