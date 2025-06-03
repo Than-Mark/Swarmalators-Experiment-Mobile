@@ -166,6 +166,9 @@ class Swarmalators:
         if self.store is not None:
             self.store.close()
 
+    def __repr__(self):
+        return str(self)
+
 
 class Swarmalators1D(Swarmalators):
     def __init__(self, agentsNum: int, dt: float, K: float, randomSeed: int = 100,
