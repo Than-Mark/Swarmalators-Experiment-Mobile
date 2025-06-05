@@ -89,6 +89,7 @@ class ChemoSensingCAP(Swarmalators2D):
         self.randomSeed = randomSeed
         self.overWrite = overWrite
 
+        np.random.seed(randomSeed)
         self.positionX = np.random.random((agentsNum, 2)) * boundaryLength
         self.phaseTheta = np.random.random(agentsNum) * 2 * np.pi
         self.freqOmega = np.random.random(agentsNum) * (self.omegaMax - omegaMin) + omegaMin
