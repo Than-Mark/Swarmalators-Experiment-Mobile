@@ -2,7 +2,7 @@ import matplotlib.colors as mcolors
 import matplotlib.animation as ma
 import matplotlib.pyplot as plt
 from itertools import product
-from typing import List
+from typing import List, Tuple, Dict, Any
 import pandas as pd
 import numpy as np
 import numba as nb
@@ -89,8 +89,24 @@ class PhaseLagPatternFormation(Swarmalators2D):
 
     @property
     def dotPhase(self) -> np.ndarray:
-        return self._calc_dot_pahse(self.deltaTheta, self.A, self.freqOmega, 
+        return self._calc_dot_phase(self.deltaTheta, self.A, self.freqOmega, 
                                     self.strengthK, self.phaseLagA0)
+
+    @property
+    def deltaX(self) -> np.ndarray:
+        return self._delta_x(self.positionX, self.positionX[:, np.newaxis], 
+                             self.boundaryLength, self.halfBoundaryLength)
+
+    @staticmethod
+    @nb.njit
+    def _delta_x(positionX: np.ndarray, others: np.ndarray,
+                 boundaryLength: float, halfBoundaryLength: float) -> np.ndarray:
+        subX = positionX - others
+        return positionX - (
+            others * (-halfBoundaryLength <= subX) * (subX <= halfBoundaryLength) + 
+            (others - boundaryLength) * (subX < -halfBoundaryLength) + 
+            (others + boundaryLength) * (subX > halfBoundaryLength)
+        )
 
     @property
     def A(self) -> np.ndarray:
@@ -99,7 +115,7 @@ class PhaseLagPatternFormation(Swarmalators2D):
 
     @staticmethod
     @nb.njit
-    def _calc_dot_pahse(deltaTheta: np.ndarray, A: np.ndarray, omega: np.ndarray, 
+    def _calc_dot_phase(deltaTheta: np.ndarray, A: np.ndarray, omega: np.ndarray, 
                         K: float, phaseLagA0: float) -> np.ndarray:
         coupling = np.zeros(deltaTheta.shape[0])
         for idx in range(deltaTheta.shape[0]):
@@ -185,3 +201,163 @@ class StateAnalysis:
         )
         ax.set_xlim(0, self.model.boundaryLength)
         ax.set_ylim(0, self.model.boundaryLength)
+
+    def check_state_input(self, positionX: np.ndarray = None, phaseTheta: np.ndarray = None,
+                          lookIdx: int = -1) -> Tuple[np.ndarray, np.ndarray]:
+        if ((positionX is None and phaseTheta is not None) or 
+            (positionX is not None and phaseTheta is None)):
+            raise ValueError("Both positionX and phaseTheta must be provided or both must be None.")
+        if positionX is None:
+            positionX, phaseTheta = self.get_state(lookIdx)
+        return positionX, phaseTheta
+
+    def calc_dot_theta(self, positionX: np.ndarray = None, phaseTheta: np.ndarray = None,
+                       lookIdx: int = -1) -> np.ndarray:
+        positionX, phaseTheta = self.check_state_input(positionX, phaseTheta, lookIdx)
+    
+        deltaTheta = phaseTheta - phaseTheta[:, np.newaxis]
+        deltaX = self.model._delta_x(positionX, positionX[:, np.newaxis], 
+                                    self.model.boundaryLength, self.model.halfBoundaryLength)
+        A = np.where(self.model.distance_x(deltaX) <= self.model.distanceD0, 1, 0)
+        return self.model._calc_dot_phase(deltaTheta, A, self.model.freqOmega, 
+                                        self.model.strengthK, self.model.phaseLagA0)
+    
+    def calc_rotation_center(self, positionX: np.ndarray = None, phaseTheta: np.ndarray = None,
+                       lookIdx: int = -1) -> np.ndarray:
+        positionX, phaseTheta = self.check_state_input(positionX, phaseTheta, lookIdx)
+
+        positionx, positiony = positionX[:, 0], positionX[:, 1]
+        dotPhase = self.calc_dot_theta(positionX, phaseTheta)
+
+        return np.array([
+            positionx - self.model.speedV / dotPhase * np.sin(phaseTheta),
+            positiony + self.model.speedV / dotPhase * np.cos(phaseTheta)
+        ]).T
+    
+    def calc_classes_and_centers(self, classDistance: float = 0.1,
+                                 positionX: np.ndarray = None,
+                                 phaseTheta: np.ndarray = None,
+                                 lookIdx: int = -1) -> Tuple[List[List[int]], np.ndarray]:
+        positionX, phaseTheta = self.check_state_input(positionX, phaseTheta, lookIdx)
+        
+        centers = self.calc_rotation_center(positionX, phaseTheta, lookIdx)
+        centers = np.mod(centers, self.model.boundaryLength)
+        totalDistances = self.model.distance_x(self.model._delta_x(
+            centers, centers[:, np.newaxis], 
+            self.model.boundaryLength, self.model.halfBoundaryLength
+        ))
+
+        classes = self._calc_classes(centers, classDistance, totalDistances)
+        return classes, centers
+    
+    def calc_classes(self, classDistance: float = 0.1,
+                     positionX: np.ndarray = None,
+                     phaseTheta: np.ndarray = None,
+                     lookIdx: int = -1) -> List[List[int]]:
+        classes, _ = self.calc_classes_and_centers(
+            classDistance, positionX, phaseTheta, lookIdx
+        )
+        return classes
+
+    @staticmethod
+    @nb.njit
+    def _calc_classes(centers: np.ndarray, classDistance: float, totalDistances: np.ndarray) -> List[List[int]]:
+        classes = [[0]]
+        classNum = 1
+        nonClassifiedOsci = np.arange(1, centers.shape[0])
+
+        for i in nonClassifiedOsci:
+            newClass = True
+
+            for classI in range(len(classes)):
+                distance = classDistance
+                for j in classes[classI]:
+                    if totalDistances[i, j] < distance:
+                        distance = totalDistances[i, j]
+                if distance < classDistance:
+                    classes[classI].append(i)
+                    newClass = False
+                    break
+
+            if newClass:
+                classNum += 1
+                classes.append([i])
+
+        newClasses = [classes[0]]
+
+        for subClass in classes[1:]:
+            newClass = True
+            for newClassI in range(len(newClasses)):
+                distance = classDistance
+                for i in newClasses[newClassI]:
+                    for j in subClass:
+                        if totalDistances[i, j] < distance:
+                            distance = totalDistances[i, j]
+                if distance < classDistance:
+                    newClasses[newClassI] += subClass
+                    newClass = False
+                    break
+
+            if newClass:
+                newClasses.append(subClass)
+    
+        return newClasses
+    
+    def calc_replative_distance(self, position1: np.ndarray, position2: np.ndarray) -> float:
+        deltaX = self.model._delta_x(position1, position2, 
+                                     self.model.boundaryLength, 
+                                     self.model.halfBoundaryLength)
+        return np.linalg.norm(deltaX, axis=1)
+
+    def calc_nearby_edges(self, edgeLenThres: float, classCenters: np.ndarray,
+                          relativeDistance: bool = False) -> Tuple[List[Tuple[int, int]], np.ndarray]:
+        if relativeDistance:
+            classIdxs = np.arange(len(classCenters))
+            edges = np.unique([
+                np.sort(adj) for adj in product(classIdxs, classIdxs) if adj[0] != adj[1]
+            ], axis=0)
+            edges = [
+                edge for edge in edges
+                if self.calc_replative_distance(
+                    classCenters[edge[0]], classCenters[edge[1]]
+                ) < edgeLenThres
+            ]
+            return [tuple(edge) for edge in edges]
+        else:
+            # For plot in periodic boundary conditions
+            # classCenters be adjusted to include periodic images
+            positionShifts = product(
+                [-self.model.boundaryLength, 0, self.model.boundaryLength],
+                [-self.model.boundaryLength, 0, self.model.boundaryLength]
+            )
+            periodicCenters = []
+            for xShift, yShift in positionShifts:
+                periodicCenters.append(
+                    np.array([classCenters[:, 0] + xShift, classCenters[:, 1] + yShift]).T
+                )
+            classCenters = np.concatenate(periodicCenters, axis=0)
+
+            classIdxs = np.arange(len(classCenters))
+            edges = np.unique([
+                np.sort(adj) for adj in product(classIdxs, classIdxs) if adj[0] != adj[1]
+            ], axis=0)
+            edges = [
+                edge for edge in edges
+                if np.linalg.norm(
+                    classCenters[edge[0]] - classCenters[edge[1]]
+                ) < edgeLenThres
+            ]
+            return [tuple(edge) for edge in edges], classCenters
+        
+    def select_classIdx_of_line(self, selectClassIdx: int, classCenters: np.ndarray,
+                                visualAngle: float, span: float) -> List[int]:
+        selectClassPos = classCenters[selectClassIdx]
+        deltaX = self.model._delta_x(selectClassPos, classCenters, 
+                                    self.model.boundaryLength, 
+                                    self.model.halfBoundaryLength)
+        spaceAngle = np.arctan2(deltaX[:, 1], deltaX[:, 0])
+        filterClassIdx = np.where(
+            (np.abs(spaceAngle - visualAngle) < span) |
+            (np.abs(spaceAngle + np.pi  - visualAngle) < span)
+        )[0]
+        return filterClassIdx.tolist() + [selectClassIdx]
