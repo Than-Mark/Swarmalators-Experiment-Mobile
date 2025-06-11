@@ -56,11 +56,11 @@ def run_model(model: PhaseLagPatternFormation):
 
 if __name__ == "__main__":
     phaseLags = np.linspace(-1, 1, 21) * np.pi
-    omegaMins = [0.1]  # np.linspace(0.1e5, 3, 21)
-    randomSeed = 10
+    omegaMins = [0]# [0.1]  # np.linspace(0.1e5, 3, 21)
+    randomSeed = 10  # Done: [9]
     strengthLambda = 20
     distanceD0 = 1
-    deltaOmega = 1.0
+    deltaOmega = 0  # Done: [1]
 
     models = [
         PhaseLagPatternFormation(

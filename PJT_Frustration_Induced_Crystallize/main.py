@@ -18,13 +18,8 @@ if "ipykernel_launcher.py" in sys.argv[0]:
 else:
     from tqdm import tqdm
 
-new_cmap = mcolors.LinearSegmentedColormap.from_list(
-    "new", plt.cm.jet(np.linspace(0, 1, 256)) * 0.85, N=256
-)
-
-@nb.njit
-def colors_idx(phaseTheta):
-    return np.floor(256 - phaseTheta / (2 * np.pi) * 256).astype(np.int32)
+colors = ["#403990", "#80A6E2", "#FBDD85", "#F46F43", "#CF3D3E"]
+cmap = mcolors.LinearSegmentedColormap.from_list("cmap", colors)
 
 
 sys.path.append("..")
@@ -56,6 +51,7 @@ class PhaseLagPatternFormation(Swarmalators2D):
         self.tqdm = tqdm
         self.savePath = savePath
         self.shotsnaps = shotsnaps
+        self.randomSeed = randomSeed
         self.overWrite = overWrite
         
         np.random.seed(randomSeed)
@@ -141,13 +137,13 @@ class PhaseLagPatternFormation(Swarmalators2D):
     def plot(self, ax: plt.Axes = None):
         if ax is None:
             fig, ax = plt.subplots(figsize=(5, 5))
+        
+        colors = ["red"] * (self.freqOmega >= 0).sum() + ["#414CC7"] * (self.freqOmega < 0).sum()
+
         plt.quiver(
-            self.positionX[:self.agentsNum // 2, 0], self.positionX[:self.agentsNum // 2, 1],
-            np.cos(self.phaseTheta[:self.agentsNum // 2]), np.sin(self.phaseTheta[:self.agentsNum // 2]), color="red"
-        )
-        plt.quiver(
-            self.positionX[self.agentsNum // 2:, 0], self.positionX[self.agentsNum // 2:, 1],
-            np.cos(self.phaseTheta[self.agentsNum // 2:]), np.sin(self.phaseTheta[self.agentsNum // 2:]), color="#414CC7"
+            self.positionX[:, 0], self.positionX[:, 1],
+            np.cos(self.phaseTheta), np.sin(self.phaseTheta), 
+            color=colors
         )
         plt.xlim(0, self.boundaryLength)
         plt.ylim(0, self.boundaryLength)
@@ -157,7 +153,8 @@ class PhaseLagPatternFormation(Swarmalators2D):
             f"PhaseLagPatternFormation(strengthK={self.strengthK:.3f},distanceD0={self.distanceD0:.3f},"
             f"phaseLagA0={self.phaseLagA0:.3f},boundaryLength={self.boundaryLength:.1f},"
             f"speedV={self.speedV:.1f},freqDist='{self.freqDist}',omegaMin={self.omegaMin:.3f},"
-            f"deltaOmega={self.deltaOmega:.3f},agentsNum={self.agentsNum},dt={self.dt:.2f})"
+            f"deltaOmega={self.deltaOmega:.3f},agentsNum={self.agentsNum},dt={self.dt:.2f}),"
+            f"randomSeed={self.randomSeed}"
         )
     
 
@@ -182,22 +179,28 @@ class StateAnalysis:
 
         return positionX, phaseTheta
     
-    def plot_spatial(self, ax: plt.Axes = None, index: int = -1):
+    def plot_spatial(self, ax: plt.Axes = None, 
+                     colorsBy: str = "freq", index: int = -1, 
+                     shift: np.ndarray = np.array([0, 0])):
+        assert colorsBy in ["freq", "phase"], "colorsBy must be 'freq' or 'phase'"
+
         positionX, phaseTheta = self.get_state(index)
+        positionX = np.mod(positionX + shift, self.model.boundaryLength)
 
         if ax is None:
-            fig, ax = plt.subplots(figsize=(6, 6))
+            _, ax = plt.subplots(figsize=(6, 6))
 
-        posIdxs = self.model.freqOmega > 0
+        if colorsBy == "freq":
+            colors = ["red"] * (self.model.freqOmega >= 0).sum() + ["#414CC7"] * (self.model.freqOmega < 0).sum()
+        elif colorsBy == "phase":
+            colors = [cmap(i) for i in
+                np.floor(256 - phaseTheta / (2 * np.pi) * 256).astype(np.int32)
+            ]
 
         ax.quiver(
-            positionX[posIdxs, 0], positionX[posIdxs, 1],
-            np.cos(phaseTheta[posIdxs]), np.sin(phaseTheta[posIdxs]), 
-            color="red", alpha=0.8
-        )
-        ax.quiver(
-            positionX[~posIdxs, 0], positionX[~posIdxs, 1],
-            np.cos(phaseTheta[~posIdxs]), np.sin(phaseTheta[~posIdxs]), color="#414CC7"
+            positionX[:, 0], positionX[:, 1],
+            np.cos(phaseTheta), np.sin(phaseTheta), 
+            color=colors
         )
         ax.set_xlim(0, self.model.boundaryLength)
         ax.set_ylim(0, self.model.boundaryLength)
