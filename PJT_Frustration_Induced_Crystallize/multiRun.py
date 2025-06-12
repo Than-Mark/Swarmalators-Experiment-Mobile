@@ -63,12 +63,12 @@ if __name__ == "__main__":
     deltaOmega = 0  # Done: [1]
 
     models = [
-        PhaseLagPatternFormation(
+        PhaseLagPatternFormationNoCounter(
             strengthK=strengthLambda, distanceD0=distanceD0, phaseLagA0=phaseLag,
             # initPhaseTheta=np.zeros(1000), 
             omegaMin=omegaMin, deltaOmega=deltaOmega, dt=0.001,
             tqdm=True, savePath=SAVE_PATH, shotsnaps=10, 
-            randomSeed=randomSeed, overWrite=True
+            randomSeed=randomSeed, overWrite=False
         )
         for omegaMin in omegaMins
         for phaseLag in phaseLags

@@ -150,13 +150,26 @@ class PhaseLagPatternFormation(Swarmalators2D):
 
     def __str__(self):
         return (
-            f"PhaseLagPatternFormation(strengthK={self.strengthK:.3f},distanceD0={self.distanceD0:.3f},"
+            f"{self.__class__.__name__}(strengthK={self.strengthK:.3f},distanceD0={self.distanceD0:.3f},"
             f"phaseLagA0={self.phaseLagA0:.3f},boundaryLength={self.boundaryLength:.1f},"
             f"speedV={self.speedV:.1f},freqDist='{self.freqDist}',omegaMin={self.omegaMin:.3f},"
             f"deltaOmega={self.deltaOmega:.3f},agentsNum={self.agentsNum},dt={self.dt:.2f}),"
             f"randomSeed={self.randomSeed}"
         )
     
+
+class PhaseLagPatternFormationNoCounter(PhaseLagPatternFormation):
+    @staticmethod
+    @nb.njit
+    def _calc_dot_phase(deltaTheta: np.ndarray, A: np.ndarray, omega: np.ndarray, 
+                        K: float, phaseLagA0: float) -> np.ndarray:
+        coupling = np.zeros(deltaTheta.shape[0])
+        for idx in range(deltaTheta.shape[0]):
+            coupling[idx] = np.mean(
+                np.sin(deltaTheta[idx][A[idx] == 1] + phaseLagA0)
+            )
+        return K * coupling + omega
+
 
 class StateAnalysis:
     def __init__(self, model: PhaseLagPatternFormation = None):
@@ -310,7 +323,7 @@ class StateAnalysis:
         deltaX = self.model._delta_x(position1, position2, 
                                      self.model.boundaryLength, 
                                      self.model.halfBoundaryLength)
-        return np.linalg.norm(deltaX, axis=1)
+        return np.linalg.norm(deltaX, axis=-1)
 
     def calc_nearby_edges(self, edgeLenThres: float, classCenters: np.ndarray,
                           relativeDistance: bool = False) -> Tuple[List[Tuple[int, int]], np.ndarray]:
