@@ -59,9 +59,9 @@ def draw_frame(sa: StateAnalysis):
     
     fig, ax = plt.subplots(1, 1, figsize=(4, 4))
 
-    sa.plot_spatial(ax=ax)
+    sa.plot_spatial(ax=ax, colorsBy="phase")
 
-    xShift = 0.5
+    xShift = 0.
     plt.xlim(0 + xShift, sa.model.boundaryLength + xShift)
     plt.ylim(0, sa.model.boundaryLength)
     plt.xticks(
@@ -69,18 +69,19 @@ def draw_frame(sa: StateAnalysis):
         np.arange(0, sa.model.boundaryLength + 1))
     plt.tick_params(length=3, direction="in")
 
-    plt.savefig(os.path.join(MP4_TEMP_PATH, f"{idx}.png"), bbox_inches='tight')
+    plt.savefig(os.path.join(MP4_TEMP_PATH, f"{idx}.png"), bbox_inches='tight', dpi=200)
     plt.close(fig)
 
 
 if __name__ == "__main__":
 
     model = PhaseLagPatternFormation(
-        strengthK=19.2, distanceD0=1, phaseLagA0=0.6 * np.pi,
+        strengthK=20, distanceD0=1, phaseLagA0=0.6 * np.pi,
         # initPhaseTheta=np.zeros(1000), 
+        omegaMin=0, deltaOmega=0,
         dt=0.001,
         tqdm=True, savePath=SAVE_PATH, shotsnaps=10, 
-        randomSeed=8, overWrite=True
+        randomSeed=9, overWrite=True
     )
 
     sa = StateAnalysis(model)
@@ -107,14 +108,20 @@ if __name__ == "__main__":
     if os.path.exists(MP4_PATH + rf"\{model}.mp4"):
         os.remove(rf"{MP4_PATH}\{model}.mp4")
         
-    fps = 30
+    import imageio.v3 as iio
+    img = iio.imread(os.path.join(MP4_TEMP_PATH, "0.png"))
+    print(img.shape)  # output: (height, width, channels)
+
+    fps = 60
     ffmpeg_command = [
         'ffmpeg',
         '-framerate', str(fps),
         '-i', os.path.join(MP4_TEMP_PATH, "%d.png"),
-        '-vf', 'setpts=PTS,scale=580x580',  # 
+        '-vf', f'scale={img.shape[1] // 2 * 2}:{img.shape[0] // 2 * 2}:flags=lanczos', 
         '-c:v', 'libx264',
+        '-crf', '28',  # Adjust the quality (lower is better, range 18-28)
         '-pix_fmt', 'yuv420p',
+        '-an',  # No audio
         rf"{MP4_PATH}/{model}.mp4"
     ]
 
