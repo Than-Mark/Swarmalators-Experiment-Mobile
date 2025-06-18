@@ -171,6 +171,32 @@ class PhaseLagPatternFormationNoCounter(PhaseLagPatternFormation):
         return K * coupling + omega
 
 
+class AdditivePhaseLagPatternFormation(PhaseLagPatternFormation):
+    @staticmethod
+    @nb.njit
+    def _calc_dot_phase(deltaTheta: np.ndarray, A: np.ndarray, omega: np.ndarray, 
+                        K: float, phaseLagA0: float) -> np.ndarray:
+        coupling = np.zeros(deltaTheta.shape[0])
+        for idx in range(deltaTheta.shape[0]):
+            coupling[idx] = np.sum(
+                np.sin(deltaTheta[idx][A[idx] == 1] + phaseLagA0) - np.sin(phaseLagA0)
+            )
+        return K * coupling + omega
+
+
+class OnlyCounterPhaseLagPatternFormation(PhaseLagPatternFormation):
+    @staticmethod
+    @nb.njit
+    def _calc_dot_phase(deltaTheta: np.ndarray, A: np.ndarray, omega: np.ndarray, 
+                        K: float, phaseLagA0: float) -> np.ndarray:
+        coupling = np.zeros(deltaTheta.shape[0])
+        for idx in range(deltaTheta.shape[0]):
+            coupling[idx] = np.mean(
+                np.sin(deltaTheta[idx][A[idx] == 1]) - np.sin(phaseLagA0)
+            )
+        return K * coupling + omega
+
+
 class StateAnalysis:
     def __init__(self, model: PhaseLagPatternFormation = None):
         if model is None:
@@ -204,7 +230,10 @@ class StateAnalysis:
             _, ax = plt.subplots(figsize=(6, 6))
 
         if colorsBy == "freq":
-            colors = ["red"] * (self.model.freqOmega >= 0).sum() + ["#414CC7"] * (self.model.freqOmega < 0).sum()
+            colors = (
+                ["red"] * (self.model.freqOmega >= 0).sum() + 
+                ["#414CC7"] * (self.model.freqOmega < 0).sum()
+            )
         elif colorsBy == "phase":
             colors = [cmap(i) for i in
                 np.floor(256 - phaseTheta / (2 * np.pi) * 256).astype(np.int32)
