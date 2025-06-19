@@ -57,32 +57,37 @@ MP4_TEMP_PATH = r"E:\MS_ExperimentData\mp4_temp"
 def draw_frame(sa: StateAnalysis):
     idx = sa.index
     
-    fig, ax = plt.subplots(1, 1, figsize=(4, 4))
+    # fig, ax = plt.subplots(1, 1, figsize=(4, 4))
 
-    sa.plot_spatial(ax=ax, colorsBy="phase")
+    sa.plot_spatial(ax=None, colorsBy="phase")
 
-    xShift = 0.
-    plt.xlim(0 + xShift, sa.model.boundaryLength + xShift)
-    plt.ylim(0, sa.model.boundaryLength)
-    plt.xticks(
-        np.arange(0 + xShift, sa.model.boundaryLength + xShift + 1),
-        np.arange(0, sa.model.boundaryLength + 1))
-    plt.tick_params(length=3, direction="in")
+    # xShift = 0.
+    # plt.xlim(0 + xShift, sa.model.boundaryLength + xShift)
+    # plt.ylim(0, sa.model.boundaryLength)
+    # plt.xticks(
+    #     np.arange(0 + xShift, sa.model.boundaryLength + xShift + 1),
+    #     np.arange(0, sa.model.boundaryLength + 1))
+    # plt.tick_params(length=3, direction="in")
 
     plt.savefig(os.path.join(MP4_TEMP_PATH, f"{idx}.png"), bbox_inches='tight', dpi=200)
-    plt.close(fig)
+    plt.close()
 
 
 if __name__ == "__main__":
 
-    model = PhaseLagPatternFormation(
-        strengthK=20, distanceD0=1, phaseLagA0=0.6 * np.pi,
-        # initPhaseTheta=np.zeros(1000), 
-        omegaMin=0, deltaOmega=0,
-        dt=0.001,
-        tqdm=True, savePath=SAVE_PATH, shotsnaps=10, 
-        randomSeed=9, overWrite=True
-    )
+    # model = PhaseLagPatternFormation(
+    #     strengthK=20, distanceD0=1, phaseLagA0=0.6 * np.pi,
+    #     # initPhaseTheta=np.zeros(1000), 
+    #     omegaMin=0, deltaOmega=0,
+    #     dt=0.001,
+    #     tqdm=True, savePath=SAVE_PATH, shotsnaps=10, 
+    #     randomSeed=9, overWrite=True
+    # )
+
+    model = PhaseLagPatternFormation1D(strengthK=20, distanceD0=1, phaseLagA0=0.6*np.pi, 
+                                       dt=0.001,
+                                       tqdm=True, savePath=SAVE_PATH, shotsnaps=10, 
+                                       randomSeed=9, overWrite=True)
 
     sa = StateAnalysis(model)
     subSaList = list()

@@ -21,6 +21,9 @@ else:
 colors = ["#403990", "#80A6E2", "#FBDD85", "#F46F43", "#CF3D3E"]
 cmap = mcolors.LinearSegmentedColormap.from_list("cmap", colors)
 
+new_cmap = mcolors.LinearSegmentedColormap.from_list(
+    "new", plt.cm.hsv(np.linspace(0, 1, 256)) * 0.85, N=256
+)
 
 sys.path.append("..")
 from swarmalatorlib.template import Swarmalators2D
@@ -134,11 +137,19 @@ class PhaseLagPatternFormation(Swarmalators2D):
             self.store.append(key="positionX", value=pd.DataFrame(self.positionX))
             self.store.append(key="phaseTheta", value=pd.DataFrame(self.phaseTheta))
     
-    def plot(self, ax: plt.Axes = None):
+    def plot(self, ax: plt.Axes = None, colorsBy: str = "freq"):
         if ax is None:
-            fig, ax = plt.subplots(figsize=(5, 5))
+            _, ax = plt.subplots(figsize=(5, 5))
         
-        colors = ["red"] * (self.freqOmega >= 0).sum() + ["#414CC7"] * (self.freqOmega < 0).sum()
+        if colorsBy == "freq":
+            colors = (
+                ["red"] * (self.freqOmega >= 0).sum() + 
+                ["#414CC7"] * (self.freqOmega < 0).sum()
+            )
+        elif colorsBy == "phase":
+            colors = [cmap(i) for i in
+                np.floor(256 - self.phaseTheta / (2 * np.pi) * 256).astype(np.int32)
+            ]
 
         plt.quiver(
             self.positionX[:, 0], self.positionX[:, 1],
@@ -197,6 +208,100 @@ class OnlyCounterPhaseLagPatternFormation(PhaseLagPatternFormation):
         return K * coupling + omega
 
 
+class PurePhaseFrustration(PhaseLagPatternFormation):
+    def __init__(self, strengthK: float, phaseLagA0: float, 
+                 freqDist: str = "uniform", initPhaseTheta: np.ndarray = None, 
+                 omegaMin: float = 0.1, deltaOmega: float = 1, 
+                 agentsNum: int = 1000, dt: float = 0.01, 
+                 tqdm: bool = False, savePath: str = None, shotsnaps: int = 10, 
+                 randomSeed: int = 10, overWrite: bool = False):
+        super().__init__(strengthK, 0, phaseLagA0, 0, 0, 
+                         freqDist, initPhaseTheta, 
+                         omegaMin, deltaOmega, 
+                         agentsNum, dt, 
+                         tqdm, savePath, shotsnaps, 
+                         randomSeed, overWrite)
+        
+    @property
+    def dotPhase(self) -> np.ndarray:
+        return self._calc_dot_phase(self.deltaTheta, None, self.freqOmega, 
+                                    self.strengthK, self.phaseLagA0)
+
+    @staticmethod
+    @nb.njit
+    def _calc_dot_phase(deltaTheta: np.ndarray, A: np.ndarray, omega: np.ndarray, 
+                        K: float, phaseLagA0: float) -> np.ndarray:
+        coupling = np.zeros(deltaTheta.shape[0])
+        for idx in range(deltaTheta.shape[0]):
+            coupling[idx] = np.mean(
+                np.sin(deltaTheta[idx] + phaseLagA0) - np.sin(phaseLagA0)
+            )
+        return K * coupling + omega
+
+    def update(self):
+        self.phaseTheta = np.mod(self.phaseTheta + self.dotPhase * self.dt, 2 * np.pi)
+
+    def append(self):
+        if self.store is not None:
+            if self.counts % self.shotsnaps != 0:
+                return
+            self.store.append(key="phaseTheta", value=pd.DataFrame(self.phaseTheta))
+
+
+class PhaseLagPatternFormation1D(PhaseLagPatternFormation):
+    def __init__(self, strengthK: float, distanceD0: float, phaseLagA0: float,
+                 boundaryLength: float = 7, speedV: float = 3.0,
+                 freqDist: str = "uniform", initPhaseTheta: np.ndarray = None,
+                 omegaMin: float = 0.1, deltaOmega: float = 1.0,
+                 agentsNum: int = 1000, dt: float = 0.01,
+                 tqdm: bool = False, savePath: str = None, shotsnaps: int = 10,
+                 randomSeed: int = 10, overWrite: bool = False) -> None:
+        super().__init__(strengthK, distanceD0, phaseLagA0,
+                         boundaryLength, speedV, freqDist, initPhaseTheta,
+                         omegaMin, deltaOmega, agentsNum, dt,
+                         tqdm, savePath, shotsnaps, randomSeed, overWrite)
+
+        self.positionX = np.random.random(agentsNum) * boundaryLength
+
+    @staticmethod
+    @nb.njit
+    def _direction(phaseTheta: np.ndarray) -> np.ndarray:
+        return np.cos(phaseTheta)
+    
+    @property
+    def A(self) -> np.ndarray:
+        """Adjacency matrix: 1 if |x_i - x_j| <= d0 else 0"""
+        return np.where(np.abs(self.deltaX) <= self.distanceD0, 1, 0)
+    
+    def plot(self, ax: plt.Axes = None) -> None:
+        colors = [new_cmap(i) for i in
+            np.floor(256 - self.phaseTheta / (2 * np.pi) * 256).astype(np.int32)
+        ]
+
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(12, 3))
+        plt.quiver(
+            self.positionX, np.zeros(self.agentsNum),
+            np.cos(self.phaseTheta), np.sin(self.phaseTheta), 
+            color=colors, scale=25, width=0.005,
+        )
+
+        plt.plot([0, self.boundaryLength], [0, 0], color="black", lw=1.5)
+        plt.xlim(-0.1, 0.1 + self.boundaryLength)
+        plt.ylim(-0.9, 0.9)
+        plt.yticks([])
+
+        ax.set_aspect('equal', adjustable='box')
+        for line in ["top", "right"]:
+            ax.spines[line].set_visible(False)
+
+        plt.grid()
+        plt.tick_params(direction='in')
+        plt.scatter(np.full(self.agentsNum, -2), np.full(self.agentsNum, -2),
+                    c=self.phaseTheta, cmap=new_cmap, alpha=0.8, vmin=0, vmax=2*np.pi)
+        plt.colorbar(ticks=[0, np.pi, 2*np.pi], ax=ax).ax.set_yticklabels(['$0$', '$\pi$', '$2\pi$'])
+
+
 class StateAnalysis:
     def __init__(self, model: PhaseLagPatternFormation = None):
         if model is None:
@@ -209,7 +314,10 @@ class StateAnalysis:
         
         TNum = totalPositionX.shape[0] // self.model.agentsNum
         self.TNum = TNum
-        self.totalPositionX = totalPositionX.values.reshape(TNum, self.model.agentsNum, 2)
+        if isinstance(model, PhaseLagPatternFormation1D):
+            self.totalPositionX = totalPositionX.values.reshape(TNum, self.model.agentsNum)
+        else:
+            self.totalPositionX = totalPositionX.values.reshape(TNum, self.model.agentsNum, 2)
         self.totalPhaseTheta = totalPhaseTheta.values.reshape(TNum, self.model.agentsNum)
 
     def get_state(self, index: int = -1):
@@ -223,11 +331,20 @@ class StateAnalysis:
                      shift: np.ndarray = np.array([0, 0])):
         assert colorsBy in ["freq", "phase"], "colorsBy must be 'freq' or 'phase'"
 
+        if isinstance(self.model, PhaseLagPatternFormation1D):
+            self.plot_spatial_1D(ax, colorsBy, index)
+        else:
+            self.plot_spatial_2D(ax, colorsBy, index, shift)
+
+    def plot_spatial_2D(self, ax: plt.Axes = None, 
+                     colorsBy: str = "freq", index: int = -1, 
+                     shift: np.ndarray = np.array([0, 0])):
+
         positionX, phaseTheta = self.get_state(index)
         positionX = np.mod(positionX + shift, self.model.boundaryLength)
 
         if ax is None:
-            _, ax = plt.subplots(figsize=(6, 6))
+            _, ax = plt.subplots(figsize=(5, 5))
 
         if colorsBy == "freq":
             colors = (
@@ -246,6 +363,37 @@ class StateAnalysis:
         )
         ax.set_xlim(0, self.model.boundaryLength)
         ax.set_ylim(0, self.model.boundaryLength)
+
+    def plot_spatial_1D(self, ax: plt.Axes = None, 
+                        colorsBy: str = "freq", index: int = -1):
+        positionX, phaseTheta = self.get_state(index)
+
+        colors = [new_cmap(i) for i in
+            np.floor(256 - phaseTheta / (2 * np.pi) * 256).astype(np.int32)
+        ]
+
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(12, 3))
+        plt.quiver(
+            positionX, np.zeros(self.model.agentsNum),
+            np.cos(phaseTheta), np.sin(phaseTheta), 
+            color=colors, scale=25, width=0.005,
+        )
+
+        plt.plot([0, self.model.boundaryLength], [0, 0], color="black", lw=1.5)
+        plt.xlim(-0.1, 0.1 + self.model.boundaryLength)
+        plt.ylim(-0.9, 0.9)
+        plt.yticks([])
+
+        ax.set_aspect('equal', adjustable='box')
+        for line in ["top", "right"]:
+            ax.spines[line].set_visible(False)
+
+        plt.grid()
+        plt.tick_params(direction='in')
+        plt.scatter(np.full(self.model.agentsNum, -2), np.full(self.model.agentsNum, -2),
+                    c=phaseTheta, cmap=new_cmap, alpha=0.8, vmin=0, vmax=2*np.pi)
+        plt.colorbar(ticks=[0, np.pi, 2*np.pi], ax=ax).ax.set_yticklabels(['$0$', '$\pi$', '$2\pi$'])
 
     def check_state_input(self, positionX: np.ndarray = None, phaseTheta: np.ndarray = None,
                           lookIdx: int = -1) -> Tuple[np.ndarray, np.ndarray]:
