@@ -169,6 +169,21 @@ class PhaseLagPatternFormation(Swarmalators2D):
         )
     
 
+class PhaseLagPatternFormationNoPeriodic(PhaseLagPatternFormation):
+    def update(self):
+        dotPos = self.dotPosition
+        dotPhase = self.dotPhase
+        
+        self.positionX = np.clip(
+            self.positionX + dotPos * self.dt, 
+            0, self.boundaryLength
+        )
+        self.phaseTheta = np.mod(self.phaseTheta + dotPhase * self.dt, 2 * np.pi)
+    
+    @property
+    def deltaX(self) -> np.ndarray:
+        return self.positionX - self.positionX[:, np.newaxis]
+
 class PhaseLagPatternFormationNoCounter(PhaseLagPatternFormation):
     @staticmethod
     @nb.njit
@@ -234,8 +249,8 @@ class PurePhaseFrustration(PhaseLagPatternFormation):
         coupling = np.zeros(deltaTheta.shape[0])
         for idx in range(deltaTheta.shape[0]):
             coupling[idx] = np.mean(
-                np.sin(deltaTheta[idx] + phaseLagA0) - np.sin(phaseLagA0)
-            )
+                np.sin(deltaTheta[idx] + phaseLagA0)
+            ) - np.sin(phaseLagA0)
         return K * coupling + omega
 
     def update(self):
