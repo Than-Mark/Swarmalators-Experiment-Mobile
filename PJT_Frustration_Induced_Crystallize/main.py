@@ -73,6 +73,13 @@ class PhaseLagPatternFormation(Swarmalators2D):
         self.freqOmega = np.sort(self.freqOmega)
         self.halfBoundaryLength = boundaryLength / 2
         self.counts = 0
+        self.dotThetaParams = (
+            self.boundaryLength,
+            self.halfBoundaryLength,
+            self.distanceD0,
+            self.strengthK,
+            self.phaseLagA0,
+        )
     
     @staticmethod
     @nb.njit
@@ -88,8 +95,49 @@ class PhaseLagPatternFormation(Swarmalators2D):
 
     @property
     def dotPhase(self) -> np.ndarray:
-        return self._calc_dot_phase(self.deltaTheta, self.A, self.freqOmega, 
-                                    self.strengthK, self.phaseLagA0)
+        # return self._calc_dot_phase(self.deltaTheta, self.A, self.freqOmega, 
+        #                             self.strengthK, self.phaseLagA0)
+        return self._calc_dot_phase2(
+                positionX=self.positionX, 
+                phaseTheta=self.phaseTheta, 
+                freqOmega=self.freqOmega, 
+                params=self.dotThetaParams
+            )
+    
+    @staticmethod
+    @nb.njit
+    def _calc_dot_phase2(positionX: np.ndarray, phaseTheta: np.ndarray, 
+                         freqOmega: np.ndarray, params: Tuple[float]) -> np.ndarray:
+        agentsNum = positionX.shape[0]
+        boundaryLength, halfBoundaryLength, distanceD0, strengthK, phaseLagA0 = params
+
+        coupling = np.zeros(agentsNum)
+        for i in range(agentsNum):
+            xDiff = np.abs(positionX[:, 0] - positionX[i, 0])
+            yDiff = np.abs(positionX[:, 1] - positionX[i, 1])
+            neighborIdxs = np.where(
+                (xDiff < distanceD0) | (boundaryLength - xDiff < distanceD0) & 
+                (yDiff < distanceD0) | (boundaryLength - yDiff < distanceD0)
+            )[0]
+            if neighborIdxs.size == 0:
+                continue
+
+            subX = positionX[i] - positionX[neighborIdxs]
+            deltaX = positionX[i] - (
+                positionX[neighborIdxs] * (-halfBoundaryLength <= subX) * (subX <= halfBoundaryLength) + 
+                (positionX[neighborIdxs] - boundaryLength) * (subX < -halfBoundaryLength) + 
+                (positionX[neighborIdxs] + boundaryLength) * (subX > halfBoundaryLength)
+            )
+            distance = np.sqrt(np.sum(deltaX**2, axis=1))
+            A = np.where(distance <= distanceD0)[0]
+            if A.size == 0:
+                continue
+
+            deltaTheta = phaseTheta[neighborIdxs][A] - phaseTheta[i]
+            coupling[i] = np.mean(
+                np.sin(deltaTheta + phaseLagA0)
+            ) - np.sin(phaseLagA0)
+        return strengthK * coupling + freqOmega
 
     @property
     def deltaX(self) -> np.ndarray:
@@ -161,11 +209,13 @@ class PhaseLagPatternFormation(Swarmalators2D):
 
     def __str__(self):
         return (
-            f"{self.__class__.__name__}(strengthK={self.strengthK:.3f},distanceD0={self.distanceD0:.3f},"
+            f"{self.__class__.__name__}("
+            f"strengthK={self.strengthK:.3f},distanceD0={self.distanceD0:.3f},"
             f"phaseLagA0={self.phaseLagA0:.3f},boundaryLength={self.boundaryLength:.1f},"
             f"speedV={self.speedV:.1f},freqDist='{self.freqDist}',omegaMin={self.omegaMin:.3f},"
-            f"deltaOmega={self.deltaOmega:.3f},agentsNum={self.agentsNum},dt={self.dt:.2f}),"
+            f"deltaOmega={self.deltaOmega:.3f},agentsNum={self.agentsNum},dt={self.dt:.2f},"
             f"randomSeed={self.randomSeed}"
+            ")"
         )
     
 
@@ -183,6 +233,7 @@ class PhaseLagPatternFormationNoPeriodic(PhaseLagPatternFormation):
     @property
     def deltaX(self) -> np.ndarray:
         return self.positionX - self.positionX[:, np.newaxis]
+
 
 class PhaseLagPatternFormationNoCounter(PhaseLagPatternFormation):
     @staticmethod
