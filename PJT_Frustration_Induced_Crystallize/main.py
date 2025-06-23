@@ -375,16 +375,21 @@ class StateAnalysis:
         self.model = model
         
         targetPath = f"{self.model.savePath}/{self.model}.h5"
-        totalPositionX = pd.read_hdf(targetPath, key="positionX")
-        totalPhaseTheta = pd.read_hdf(targetPath, key="phaseTheta")
         
-        TNum = totalPositionX.shape[0] // self.model.agentsNum
+        totalPhaseTheta = pd.read_hdf(targetPath, key="phaseTheta")
+        TNum = totalPhaseTheta.shape[0] // self.model.agentsNum
         self.TNum = TNum
+        self.totalPhaseTheta = totalPhaseTheta.values.reshape(TNum, self.model.agentsNum)
+
+        if isinstance(model, PurePhaseFrustration):
+            return
+
+        totalPositionX = pd.read_hdf(targetPath, key="positionX")
         if isinstance(model, PhaseLagPatternFormation1D):
             self.totalPositionX = totalPositionX.values.reshape(TNum, self.model.agentsNum)
         else:
             self.totalPositionX = totalPositionX.values.reshape(TNum, self.model.agentsNum, 2)
-        self.totalPhaseTheta = totalPhaseTheta.values.reshape(TNum, self.model.agentsNum)
+        
 
     def get_state(self, index: int = -1):
         positionX = self.totalPositionX[index]
