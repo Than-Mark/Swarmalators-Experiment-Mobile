@@ -75,19 +75,18 @@ def draw_frame(sa: StateAnalysis):
 
 if __name__ == "__main__":
 
-    # model = PhaseLagPatternFormation(
-    #     strengthK=20, distanceD0=1, phaseLagA0=0.6 * np.pi,
-    #     # initPhaseTheta=np.zeros(1000), 
-    #     omegaMin=0, deltaOmega=0,
-    #     dt=0.001,
-    #     tqdm=True, savePath=SAVE_PATH, shotsnaps=10, 
-    #     randomSeed=9, overWrite=True
-    # )
+    model = PhaseLagPatternFormation(
+        strengthK=10.5, distanceD0=0.58333, phaseLagA0=0.6 * np.pi,
+        omegaMin=0, deltaOmega=1, 
+        agentsNum=3000, dt=0.005,
+        tqdm=True, savePath=SAVE_PATH, shotsnaps=10, 
+        randomSeed=randomSeed, overWrite=True
+    )
 
-    model = PhaseLagPatternFormation1D(strengthK=20, distanceD0=1, phaseLagA0=0.6*np.pi, 
-                                       dt=0.001,
-                                       tqdm=True, savePath=SAVE_PATH, shotsnaps=10, 
-                                       randomSeed=9, overWrite=True)
+    # model = PhaseLagPatternFormation1D(strengthK=20, distanceD0=1, phaseLagA0=0.6*np.pi, 
+    #                                    dt=0.001,
+    #                                    tqdm=True, savePath=SAVE_PATH, shotsnaps=10, 
+    #                                    randomSeed=9, overWrite=True)
 
     sa = StateAnalysis(model)
     subSaList = list()

@@ -392,7 +392,10 @@ class StateAnalysis:
         
 
     def get_state(self, index: int = -1):
-        positionX = self.totalPositionX[index]
+        if isinstance(self.model, PurePhaseFrustration):
+            positionX = None
+        else:
+            positionX = self.totalPositionX[index]
         phaseTheta = self.totalPhaseTheta[index]
 
         return positionX, phaseTheta
@@ -625,3 +628,10 @@ class StateAnalysis:
             (np.abs(spaceAngle + np.pi  - visualAngle) < span)
         )[0]
         return filterClassIdx.tolist() + [selectClassIdx]
+    
+    def calc_order_parameter_R(self, phaseTheta: np.ndarray = None,
+                               lookIdx: int = -1) -> float:
+        if phaseTheta is None:
+            _, phaseTheta = self.get_state(lookIdx)
+        
+        return np.abs(np.mean(np.exp(1j * phaseTheta)))
