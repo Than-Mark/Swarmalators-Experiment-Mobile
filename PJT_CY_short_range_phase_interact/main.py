@@ -213,10 +213,32 @@ class StateAnalysis:
     
     @staticmethod
     def calc_order_parameter_S(model: ShortRangePhaseInter1) -> float:
+        # 计算每个agent的相位角
         phi = np.arctan2(model.positionX[:, 1], model.positionX[:, 0])
+        # 计算Sadd
         Sadd = np.abs(np.sum(np.exp(1j * (phi + model.phaseTheta)))) / model.agentsNum
+        # 计算Ssub
         Ssub = np.abs(np.sum(np.exp(1j * (phi - model.phaseTheta)))) / model.agentsNum
+        # 返回Sadd和Ssub中的最大值
         return np.max([Sadd, Ssub])
+    
+    @staticmethod
+    def calc_local_order_parameter_Z(model: ShortRangePhaseInter1, d: float) -> float:
+        positions = model.positionX  # N x 2
+        thetas = model.phaseTheta    # N
+        N = model.agentsNum
+        Z_total = 0.0
+        for i in range(N):
+            distances = np.linalg.norm(positions - positions[i], axis=1)
+            neighbors = np.where(distances <= d)[0]
+            if len(neighbors) > 0:
+                local_sum = np.sum(np.exp(1j * thetas[neighbors]))
+                Z_i = np.abs(local_sum / len(neighbors))
+                Z_total += Z_i
+        Z_avg = Z_total / N
+        return Z_avg
+    
+
 
     @staticmethod
     def calc_order_parameter_Vp(model: ShortRangePhaseInter1) -> float:
