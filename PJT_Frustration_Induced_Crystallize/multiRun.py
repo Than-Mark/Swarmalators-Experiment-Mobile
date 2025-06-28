@@ -72,7 +72,7 @@ if __name__ == "__main__":
     deltaOmegas = [0]  # np.linspace(1e-5, 3, 21)  # [1.0]
 
     models = [
-        PhaseLagPatternFormation(
+        HalfInitPhaseLagPatternFormation(
             strengthK=strengthK, distanceD0=distanceD0, phaseLagA0=phaseLag,
             freqDist="uniform", 
             omegaMin=omegaMin, deltaOmega=deltaOmega, 

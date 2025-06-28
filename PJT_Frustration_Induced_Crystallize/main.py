@@ -221,6 +221,24 @@ class PhaseLagPatternFormation(Swarmalators2D):
         )
     
 
+class HalfInitPhaseLagPatternFormation(PhaseLagPatternFormation):
+    def __init__(self, strengthK: float, distanceD0: float, phaseLagA0: float,
+                 boundaryLength: float = 7, speedV: float = 3.0,
+                 freqDist: str = "uniform", initPhaseTheta: np.ndarray = None,
+                 omegaMin: float = 0.1, deltaOmega: float = 1.0,
+                 agentsNum: int = 1000, dt: float = 0.01,
+                 tqdm: bool = False, savePath: str = None, shotsnaps: int = 10,
+                 randomSeed: int = 10, overWrite: bool = False) -> None:
+        super().__init__(strengthK, distanceD0, phaseLagA0, boundaryLength, speedV, 
+                         freqDist, initPhaseTheta, omegaMin, deltaOmega, agentsNum, 
+                         dt, tqdm, savePath, shotsnaps, randomSeed, overWrite)
+        self.positionX = np.concatenate([
+            np.random.random((agentsNum // 2, 2)) * [self.halfBoundaryLength, boundaryLength],
+            np.random.random((agentsNum // 2, 2)) * [self.halfBoundaryLength, boundaryLength]
+             + [self.halfBoundaryLength, 0]
+        ])
+    
+
 class PhaseLagPatternFormationNoPeriodic(PhaseLagPatternFormation):
     def update(self):
         dotPos = self.dotPosition
