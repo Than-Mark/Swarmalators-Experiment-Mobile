@@ -18,7 +18,7 @@ if "ipykernel_launcher.py" in sys.argv[0]:
 else:
     from tqdm import tqdm
 
-colors = ["#403990", "#80A6E2", "#FBDD85", "#F46F43", "#CF3D3E"]
+colors = ["#403990", "#3A76D6", "#FFC001", "#F46F43", "#FF0000"]
 cmap = mcolors.LinearSegmentedColormap.from_list("cmap", colors)
 
 new_cmap = mcolors.LinearSegmentedColormap.from_list(
@@ -66,7 +66,7 @@ class PhaseLagPatternFormation(Swarmalators2D):
         if freqDist == "uniform":
             posOmega = np.random.uniform(omegaMin, omegaMin + deltaOmega, agentsNum // 2)
         else:
-            posOmega = np.random.standard_cauchy(agentsNum // 2)
+            posOmega = np.abs(np.random.standard_cauchy(agentsNum // 2))
         self.freqOmega = np.concatenate([
             posOmega, -posOmega
         ])
@@ -212,8 +212,10 @@ class PhaseLagPatternFormation(Swarmalators2D):
             f"{self.__class__.__name__}("
             f"strengthK={self.strengthK:.3f},distanceD0={self.distanceD0:.3f},"
             f"phaseLagA0={self.phaseLagA0:.3f},boundaryLength={self.boundaryLength:.1f},"
-            f"speedV={self.speedV:.1f},freqDist='{self.freqDist}',omegaMin={self.omegaMin:.3f},"
-            f"deltaOmega={self.deltaOmega:.3f},agentsNum={self.agentsNum},dt={self.dt:.2f},"
+            f"speedV={self.speedV:.1f},freqDist='{self.freqDist}',"
+            f"{'initPhaseTheta,' if self.initPhaseTheta is not None else ''}"
+            f"omegaMin={self.omegaMin:.3f},deltaOmega={self.deltaOmega:.3f},"
+            f"agentsNum={self.agentsNum},dt={self.dt:.2f},"
             f"randomSeed={self.randomSeed}"
             ")"
         )
@@ -251,14 +253,38 @@ class PhaseLagPatternFormationNoCounter(PhaseLagPatternFormation):
 class AdditivePhaseLagPatternFormation(PhaseLagPatternFormation):
     @staticmethod
     @nb.njit
-    def _calc_dot_phase(deltaTheta: np.ndarray, A: np.ndarray, omega: np.ndarray, 
-                        K: float, phaseLagA0: float) -> np.ndarray:
-        coupling = np.zeros(deltaTheta.shape[0])
-        for idx in range(deltaTheta.shape[0]):
-            coupling[idx] = np.sum(
-                np.sin(deltaTheta[idx][A[idx] == 1] + phaseLagA0) - np.sin(phaseLagA0)
+    def _calc_dot_phase2(positionX: np.ndarray, phaseTheta: np.ndarray, 
+                         freqOmega: np.ndarray, params: Tuple[float]) -> np.ndarray:
+        agentsNum = positionX.shape[0]
+        boundaryLength, halfBoundaryLength, distanceD0, strengthK, phaseLagA0 = params
+
+        coupling = np.zeros(agentsNum)
+        for i in range(agentsNum):
+            xDiff = np.abs(positionX[:, 0] - positionX[i, 0])
+            yDiff = np.abs(positionX[:, 1] - positionX[i, 1])
+            neighborIdxs = np.where(
+                (xDiff < distanceD0) | (boundaryLength - xDiff < distanceD0) & 
+                (yDiff < distanceD0) | (boundaryLength - yDiff < distanceD0)
+            )[0]
+            if neighborIdxs.size == 0:
+                continue
+
+            subX = positionX[i] - positionX[neighborIdxs]
+            deltaX = positionX[i] - (
+                positionX[neighborIdxs] * (-halfBoundaryLength <= subX) * (subX <= halfBoundaryLength) + 
+                (positionX[neighborIdxs] - boundaryLength) * (subX < -halfBoundaryLength) + 
+                (positionX[neighborIdxs] + boundaryLength) * (subX > halfBoundaryLength)
             )
-        return K * coupling + omega
+            distance = np.sqrt(np.sum(deltaX**2, axis=1))
+            A = np.where(distance <= distanceD0)[0]
+            if A.size == 0:
+                continue
+
+            deltaTheta = phaseTheta[neighborIdxs][A] - phaseTheta[i]
+            coupling[i] = np.sum(
+                np.sin(deltaTheta + phaseLagA0) - np.sin(phaseLagA0)
+            )
+        return strengthK * coupling + freqOmega
 
 
 class OnlyCounterPhaseLagPatternFormation(PhaseLagPatternFormation):
@@ -300,8 +326,8 @@ class PurePhaseFrustration(PhaseLagPatternFormation):
         coupling = np.zeros(deltaTheta.shape[0])
         for idx in range(deltaTheta.shape[0]):
             coupling[idx] = np.mean(
-                np.sin(deltaTheta[idx] + phaseLagA0)
-            ) - np.sin(phaseLagA0)
+                np.sin(deltaTheta[idx] + phaseLagA0) - np.sin(phaseLagA0)
+            )
         return K * coupling + omega
 
     def update(self):
@@ -433,6 +459,7 @@ class StateAnalysis:
         ax.quiver(
             positionX[:, 0], positionX[:, 1],
             np.cos(phaseTheta), np.sin(phaseTheta), 
+            scale_units='inches', scale=15.0, width=0.002,
             color=colors
         )
         ax.set_xlim(0, self.model.boundaryLength)

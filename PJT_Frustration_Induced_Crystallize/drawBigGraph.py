@@ -9,6 +9,8 @@ import numba as nb
 import imageio
 import os
 import shutil
+import sys
+sys.path.append("..")
 
 randomSeed = 10
 
@@ -44,30 +46,37 @@ plt.rcParams['mathtext.fontset'] = 'stix'
 plt.rcParams['font.family'] = 'STIXGeneral'
 plt.rcParams['animation.ffmpeg_path'] = "/opt/conda/bin/ffmpeg"
 
-from main import *
+from PJT_Frustration_Induced_Crystallize.main import *
 from multiprocessing import Pool
 
 SAVE_PATH = r"E:\MS_ExperimentData\general"
 
 
-phaseLags = np.linspace(-1, 1, 21) * np.pi
-omegaMins = [0]# [0.1]  # np.linspace(0.1e5, 3, 21)
-randomSeed = 10  # Done: [9]
-strengthLambda = 20
-distanceD0 = 1
-deltaOmega = 0  # Done: [1]
+# phaseLags = np.linspace(-1, 1, 21) * np.pi
+phaseLags = np.linspace(0, 1, 11) * np.pi
+# phaseLags = [0.6 * np.pi]
+omegaMins = [0]  # np.linspace(1e-5, 3, 21)
+randomSeed = 10
+strengthKs = [20]  # np.linspace(1, 20, 7)
+distanceD0s = [1]  # np.linspace(0.1, 3, 7)
+deltaOmegas = [0]  # np.linspace(1e-5, 3, 21)  # [1.0]
 
 models = [
     PhaseLagPatternFormation(
-        strengthK=strengthLambda, distanceD0=distanceD0, phaseLagA0=phaseLag,
-        # initPhaseTheta=np.zeros(1000), 
-        omegaMin=omegaMin, deltaOmega=deltaOmega, dt=0.001,
+        strengthK=strengthK, distanceD0=distanceD0, phaseLagA0=phaseLag,
+        freqDist="uniform", 
+        omegaMin=omegaMin, deltaOmega=deltaOmega, 
+        agentsNum=1000, dt=0.005,
         tqdm=True, savePath=SAVE_PATH, shotsnaps=10, 
         randomSeed=randomSeed, overWrite=True
     )
+    for strengthK in strengthKs
+    for distanceD0 in distanceD0s
     for omegaMin in omegaMins
+    for deltaOmega in deltaOmegas
     for phaseLag in phaseLags
 ]
+
 sas = [StateAnalysis(model) for model in tqdm(models)]
 
 fig, axs = plt.subplots(
@@ -82,7 +91,7 @@ for i, sa in tqdm(enumerate(sas), total=len(sas)):
 
     ax = axs[i]
     index = -1
-    sa.plot_spatial(ax, index=index)
+    sa.plot_spatial(ax, colorsBy="phase", index=index)
     subLetter = chr(97 + i)
     ax.set_xticks([])
     ax.set_yticks([])
@@ -96,8 +105,10 @@ for i, sa in tqdm(enumerate(sas), total=len(sas)):
 plt.tight_layout()
 
 plt.savefig(
-    f"./figs/MeanFieldChiralInducedPhaseLag_"
-    f"l{strengthLambda}_d{distanceD0}_dO{deltaOmega}_rS{randomSeed}_micro.png", 
+    f"figs/{sa.model.__class__.__name__}_"
+    f"a{phaseLags[0]:.2f}_Do{deltaOmegas[0]}"
+    f"{'initPhaseTheta,' if sa.model.initPhaseTheta is not None else ''}"
+    f"_aN{sa.model.agentsNum}_dist{sa.model.freqDist}.pdf", 
     bbox_inches="tight"
 )
 plt.close()

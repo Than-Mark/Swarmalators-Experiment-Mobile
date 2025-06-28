@@ -9,6 +9,10 @@ import numba as nb
 import imageio
 import os
 import shutil
+import sys
+sys.path.append("..")
+
+from PJT_Frustration_Induced_Crystallize.main import *
 
 randomSeed = 10
 
@@ -59,37 +63,39 @@ def run_model(model: PhaseLagPatternFormation):
 
 if __name__ == "__main__":
     # phaseLags = np.linspace(-1, 1, 21) * np.pi
-    phaseLags = [0.6 * np.pi]
+    phaseLags = np.linspace(0, 1, 11) * np.pi
+    # phaseLags = [0.6 * np.pi]
     omegaMins = [0]  # np.linspace(1e-5, 3, 21)
     randomSeed = 10
-    strengthKs = np.linspace(1, 20, 7)  # [20]
-    distanceD0s = np.linspace(0.1, 3, 7)  #  [1]
-    deltaOmegas = [1]  # np.linspace(1e-5, 3, 21)  # [1.0]
+    strengthKs = [20]  # np.linspace(1, 20, 7)
+    distanceD0s = [1]  # np.linspace(0.1, 3, 7)
+    deltaOmegas = [0]  # np.linspace(1e-5, 3, 21)  # [1.0]
 
-    # models = [
-    #     PhaseLagPatternFormation(
-    #         strengthK=strengthK, distanceD0=distanceD0, phaseLagA0=phaseLag,
-    #         omegaMin=omegaMin, deltaOmega=deltaOmega, 
-    #         agentsNum=3000, dt=0.005,
-    #         tqdm=True, savePath=SAVE_PATH, shotsnaps=10, 
-    #         randomSeed=randomSeed, overWrite=True
-    #     )
-    #     for strengthK in strengthKs
-    #     for distanceD0 in distanceD0s
-    #     for omegaMin in omegaMins
-    #     for deltaOmega in deltaOmegas
-    #     for phaseLag in phaseLags
-    # ]
-
-    strengthKs = np.linspace(1, 20, 10)
     models = [
-        PurePhaseFrustration(strengthK=strengthK, phaseLagA0=0.6 * np.pi, 
-                             omegaMin=0, deltaOmega=0,
-                             tqdm=True, savePath=SAVE_PATH, overWrite=True, shotsnaps=5)
+        PhaseLagPatternFormation(
+            strengthK=strengthK, distanceD0=distanceD0, phaseLagA0=phaseLag,
+            freqDist="uniform", 
+            omegaMin=omegaMin, deltaOmega=deltaOmega, 
+            agentsNum=1000, dt=0.005,
+            tqdm=True, savePath=SAVE_PATH, shotsnaps=10, 
+            randomSeed=randomSeed, overWrite=True
+        )
         for strengthK in strengthKs
+        for distanceD0 in distanceD0s
+        for omegaMin in omegaMins
+        for deltaOmega in deltaOmegas
+        for phaseLag in phaseLags
     ]
 
-    with Pool(min(len(models), 10)) as p:
+    # strengthKs = np.linspace(1, 20, 10)
+    # models = [
+    #     PurePhaseFrustration(strengthK=strengthK, phaseLagA0=0.6 * np.pi, 
+    #                          omegaMin=0, deltaOmega=0,
+    #                          tqdm=True, savePath=SAVE_PATH, overWrite=True, shotsnaps=5)
+    #     for strengthK in strengthKs
+    # ]
+
+    with Pool(min(len(models), 11)) as p:
     # with Pool(42) as p:
         p.map(
             run_model, 

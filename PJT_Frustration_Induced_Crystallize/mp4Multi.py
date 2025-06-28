@@ -10,6 +10,10 @@ import subprocess
 import imageio
 import os
 import shutil
+import sys
+sys.path.append("..")
+
+from PJT_Frustration_Induced_Crystallize.main import *
 
 new_cmap = mcolors.LinearSegmentedColormap.from_list(
     "new", plt.cm.jet(np.linspace(0, 1, 256)) * 0.85, N=256
@@ -40,7 +44,6 @@ plt.rcParams['mathtext.fontset'] = 'cm'
 plt.rcParams['font.family'] = 'STIXGeneral'
 # plt.rcParams['animation.ffmpeg_path'] = "/opt/conda/bin/ffmpeg"
 
-from main import *
 from multiprocessing import Pool
 import pandas as pd
 
@@ -76,9 +79,10 @@ def draw_frame(sa: StateAnalysis):
 if __name__ == "__main__":
 
     model = PhaseLagPatternFormation(
-        strengthK=10.5, distanceD0=0.58333, phaseLagA0=0.6 * np.pi,
-        omegaMin=0, deltaOmega=1, 
-        agentsNum=3000, dt=0.005,
+        strengthK=20, distanceD0=1, phaseLagA0=0.8 * np.pi,
+        freqDist="uniform", 
+        omegaMin=0, deltaOmega=0, 
+        agentsNum=1000, dt=0.005,
         tqdm=True, savePath=SAVE_PATH, shotsnaps=10, 
         randomSeed=randomSeed, overWrite=True
     )
