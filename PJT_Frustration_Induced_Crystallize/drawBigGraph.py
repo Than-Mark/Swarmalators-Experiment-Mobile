@@ -62,7 +62,7 @@ distanceD0s = [1]  # np.linspace(0.1, 3, 7)
 deltaOmegas = [0]  # np.linspace(1e-5, 3, 21)  # [1.0]
 
 models = [
-    PhaseLagPatternFormation(
+    HalfInitPhaseLagPatternFormation(
         strengthK=strengthK, distanceD0=distanceD0, phaseLagA0=phaseLag,
         freqDist="uniform", 
         omegaMin=omegaMin, deltaOmega=deltaOmega, 
@@ -91,7 +91,7 @@ for i, sa in tqdm(enumerate(sas), total=len(sas)):
 
     ax = axs[i]
     index = -1
-    sa.plot_spatial(ax, colorsBy="phase", index=index)
+    sa.plot_spatial(ax, colorsBy="freq", index=index)
     subLetter = chr(97 + i)
     ax.set_xticks([])
     ax.set_yticks([])

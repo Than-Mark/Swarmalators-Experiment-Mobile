@@ -17,7 +17,7 @@ from PJT_Frustration_Induced_Crystallize.main import *
 randomSeed = 10
 
 new_cmap = mcolors.LinearSegmentedColormap.from_list(
-    "new", plt.cm.hsv(np.linspace(0, 1, 256)) * 0.85, N=256
+    "new", plt.cm.hsv(np.linspace(0, 1, 256)) * 0.85, N=256  # type: ignore
 )
 colors = ["#5657A4", "#95D3A2", "#FFFFBF", "#F79051", "#A30644"]
 cmap = mcolors.LinearSegmentedColormap.from_list("my_colormap", colors)
@@ -51,7 +51,8 @@ plt.rcParams['animation.ffmpeg_path'] = "/opt/conda/bin/ffmpeg"
 from main import *
 from multiprocessing import Pool
 
-SAVE_PATH = "E:\MS_ExperimentData\general"
+# SAVE_PATH = r"E:\MS_ExperimentData\general"
+SAVE_PATH = r"D:\MS_ExperimentData\general"
 
 
 def run_model(model: PhaseLagPatternFormation):
@@ -69,7 +70,7 @@ if __name__ == "__main__":
     randomSeed = 10
     strengthKs = [20]  # np.linspace(1, 20, 7)
     distanceD0s = [1]  # np.linspace(0.1, 3, 7)
-    deltaOmegas = [0]  # np.linspace(1e-5, 3, 21)  # [1.0]
+    deltaOmegas = [1]  # np.linspace(1e-5, 3, 21)  # [1.0]
 
     models = [
         HalfInitPhaseLagPatternFormation(
