@@ -37,17 +37,33 @@ class Swarmalators:
         self.temp = {}
         self.overWrite = overWrite 
 
-    def init_store(self):
+    def init_store(self, TNum: int) -> bool:
         if self.savePath is None:
             self.store = None
         else:
-            if os.path.exists(f"{self.savePath}/{self}.h5"):
-                if self.overWrite:
-                    os.remove(f"{self.savePath}/{self}.h5")
-                else:
-                    print(f"{self.savePath}/{self}.h5 already exists")
-                    return False
-            self.store = pd.HDFStore(f"{self.savePath}/{self}.h5")
+            targetPath = f"{self.savePath}/{self}.h5"
+
+            if self.overWrite and os.path.exists(targetPath):
+                os.remove(targetPath)
+
+            if not os.path.exists(targetPath):
+                self.store = pd.HDFStore(targetPath)
+                return True
+
+            print(f"{targetPath} already exists, ", end="")
+            endTNum = TNum // self.shotsnaps + 2
+            sa = StateAnalysis(self)
+            if sa.TNum >= endTNum:
+                print(f"already has {sa.TNum} snapshots, no need to run again.")
+                return False
+            print(f"but has only {sa.TNum} snapshots, will continue to run until {endTNum} snapshots.")
+
+            self.positionX, self.phaseTheta = sa.get_state(-1)
+            self.counts = (sa.TNum - 2) * self.shotsnaps + 1
+
+            self.store = pd.HDFStore(targetPath, mode="a")
+
+            
         self.append()
         return True
 
@@ -144,13 +160,13 @@ class Swarmalators:
 
     def run(self, TNum: int):
         
-        if not self.init_store():
+        if not self.init_store(TNum):
             return 
 
         if self.tqdm:
-            iterRange = tqdm(range(TNum))
+            iterRange = tqdm(range(self.counts, TNum))
         else:
-            iterRange = range(TNum)
+            iterRange = range(self.counts, TNum)
 
         for idx in iterRange:
             self.update()
@@ -328,3 +344,26 @@ class Swarmalators2D(Swarmalators):
         answer[np.isnan(answer) | np.isinf(answer)] = 0
 
         return answer
+    
+
+class StateAnalysis:
+    def __init__(self, model: Swarmalators2D = None):
+        if model is None:
+            return
+        self.model = model
+        
+        targetPath = f"{self.model.savePath}/{self.model}.h5"
+        
+        totalPhaseTheta = pd.read_hdf(targetPath, key="phaseTheta")
+        TNum = totalPhaseTheta.shape[0] // self.model.agentsNum
+        self.TNum = TNum
+        self.totalPhaseTheta = totalPhaseTheta.values.reshape(TNum, self.model.agentsNum)
+
+        totalPositionX = pd.read_hdf(targetPath, key="positionX")
+        self.totalPositionX = totalPositionX.values.reshape(TNum, self.model.agentsNum, 2)
+
+    def get_state(self, index: int = -1):
+        positionX = self.totalPositionX[index]
+        phaseTheta = self.totalPhaseTheta[index]
+
+        return positionX, phaseTheta

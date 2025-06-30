@@ -51,8 +51,8 @@ plt.rcParams['animation.ffmpeg_path'] = "/opt/conda/bin/ffmpeg"
 from main import *
 from multiprocessing import Pool
 
-# SAVE_PATH = r"E:\MS_ExperimentData\general"
-SAVE_PATH = r"D:\MS_ExperimentData\general"
+SAVE_PATH = r"E:\MS_ExperimentData\general"
+# SAVE_PATH = r"D:\MS_ExperimentData\general"
 
 
 def run_model(model: PhaseLagPatternFormation):
@@ -73,7 +73,7 @@ if __name__ == "__main__":
     deltaOmegas = [1]  # np.linspace(1e-5, 3, 21)  # [1.0]
 
     models = [
-        HalfInitPhaseLagPatternFormation(
+        ChessboardPhaseLagPatternFormation(
             strengthK=strengthK, distanceD0=distanceD0, phaseLagA0=phaseLag,
             freqDist="uniform", 
             omegaMin=omegaMin, deltaOmega=deltaOmega, 

@@ -79,12 +79,12 @@ def draw_frame(sa: StateAnalysis):
 if __name__ == "__main__":
 
     model = PhaseLagPatternFormation(
-        strengthK=20, distanceD0=1, phaseLagA0=0.8 * np.pi,
-        freqDist="uniform", 
-        omegaMin=0, deltaOmega=0, 
-        agentsNum=1000, dt=0.005,
-        tqdm=True, savePath=SAVE_PATH, shotsnaps=10, 
-        randomSeed=randomSeed, overWrite=True
+        strengthK=20, distanceD0=1, phaseLagA0=0.6 * np.pi,
+        # initPhaseTheta=np.zeros(1000), 
+        omegaMin=0, deltaOmega=0,
+        agentsNum=3000, dt=0.005,
+        tqdm=True, savePath=SAVE_PATH, shotsnaps=1, 
+        randomSeed=10, overWrite=True
     )
 
     # model = PhaseLagPatternFormation1D(strengthK=20, distanceD0=1, phaseLagA0=0.6*np.pi, 
@@ -92,26 +92,26 @@ if __name__ == "__main__":
     #                                    tqdm=True, savePath=SAVE_PATH, shotsnaps=10, 
     #                                    randomSeed=9, overWrite=True)
 
-    sa = StateAnalysis(model)
-    subSaList = list()
-    for i in tqdm(range(0, sa.TNum), desc="Processing data"):
-        subSa = StateAnalysis()
-        subSa.totalPositionX = [sa.totalPositionX[i]]
-        subSa.totalPhaseTheta = [sa.totalPhaseTheta[i]]
-        subSa.model = sa.model
-        subSa.index = i
-        subSa.model = sa.model
-        subSaList.append(subSa)
+    # sa = StateAnalysis(model)
+    # subSaList = list()
+    # for i in tqdm(range(0, sa.TNum), desc="Processing data"):
+    #     subSa = StateAnalysis()
+    #     subSa.totalPositionX = [sa.totalPositionX[i]]
+    #     subSa.totalPhaseTheta = [sa.totalPhaseTheta[i]]
+    #     subSa.model = sa.model
+    #     subSa.index = i
+    #     subSa.model = sa.model
+    #     subSaList.append(subSa)
 
-    if os.path.exists(MP4_TEMP_PATH):
-        shutil.rmtree(MP4_TEMP_PATH)
-    os.mkdir(MP4_TEMP_PATH)
+    # if os.path.exists(MP4_TEMP_PATH):
+    #     shutil.rmtree(MP4_TEMP_PATH)
+    # os.mkdir(MP4_TEMP_PATH)
     
-    with Pool(10) as p:
-        p.map(
-            draw_frame,
-            tqdm(subSaList, desc="Drawing frames", total=sa.TNum),
-        )
+    # with Pool(10) as p:
+    #     p.map(
+    #         draw_frame,
+    #         tqdm(subSaList, desc="Drawing frames", total=sa.TNum),
+    #     )
     
     if os.path.exists(MP4_PATH + rf"\{model}.mp4"):
         os.remove(rf"{MP4_PATH}\{model}.mp4")

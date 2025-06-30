@@ -59,10 +59,10 @@ omegaMins = [0]  # np.linspace(1e-5, 3, 21)
 randomSeed = 10
 strengthKs = [20]  # np.linspace(1, 20, 7)
 distanceD0s = [1]  # np.linspace(0.1, 3, 7)
-deltaOmegas = [0]  # np.linspace(1e-5, 3, 21)  # [1.0]
+deltaOmegas = [1]  # np.linspace(1e-5, 3, 21)  # [1.0]
 
 models = [
-    HalfInitPhaseLagPatternFormation(
+    ChessboardPhaseLagPatternFormation(
         strengthK=strengthK, distanceD0=distanceD0, phaseLagA0=phaseLag,
         freqDist="uniform", 
         omegaMin=omegaMin, deltaOmega=deltaOmega, 

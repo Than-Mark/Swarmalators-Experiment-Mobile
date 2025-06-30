@@ -202,6 +202,7 @@ class PhaseLagPatternFormation(Swarmalators2D):
         plt.quiver(
             self.positionX[:, 0], self.positionX[:, 1],
             np.cos(self.phaseTheta), np.sin(self.phaseTheta), 
+            scale_units='inches', scale=15.0, width=0.002,
             color=colors
         )
         plt.xlim(0, self.boundaryLength)
@@ -212,11 +213,11 @@ class PhaseLagPatternFormation(Swarmalators2D):
             f"{self.__class__.__name__}("
             f"strengthK={self.strengthK:.3f},distanceD0={self.distanceD0:.3f},"
             f"phaseLagA0={self.phaseLagA0:.3f},boundaryLength={self.boundaryLength:.1f},"
-            f"speedV={self.speedV:.1f},freqDist='{self.freqDist}',"
+            f"speedV={self.speedV:.1f},freqDist={self.freqDist},"
             f"{'initPhaseTheta,' if self.initPhaseTheta is not None else ''}"
             f"omegaMin={self.omegaMin:.3f},deltaOmega={self.deltaOmega:.3f},"
-            f"agentsNum={self.agentsNum},dt={self.dt:.2f},"
-            f"randomSeed={self.randomSeed}"
+            f"agentsNum={self.agentsNum},dt={self.dt:.3f},"
+            f"shotsnaps={self.shotsnaps},randomSeed={self.randomSeed}"
             ")"
         )
     
@@ -235,7 +236,29 @@ class HalfInitPhaseLagPatternFormation(PhaseLagPatternFormation):
         self.positionX = np.concatenate([
             np.random.random((agentsNum // 2, 2)) * [self.halfBoundaryLength, boundaryLength],
             np.random.random((agentsNum // 2, 2)) * [self.halfBoundaryLength, boundaryLength]
-             + [self.halfBoundaryLength, 0]
+            + [self.halfBoundaryLength, 0]
+        ])
+
+
+class ChessboardPhaseLagPatternFormation(PhaseLagPatternFormation):
+    def __init__(self, strengthK: float, distanceD0: float, phaseLagA0: float,
+                 boundaryLength: float = 7, speedV: float = 3.0,
+                 freqDist: str = "uniform", initPhaseTheta: np.ndarray = None,
+                 omegaMin: float = 0.1, deltaOmega: float = 1.0,
+                 agentsNum: int = 1000, dt: float = 0.01,
+                 tqdm: bool = False, savePath: str = None, shotsnaps: int = 10,
+                 randomSeed: int = 10, overWrite: bool = False) -> None:
+        super().__init__(strengthK, distanceD0, phaseLagA0, boundaryLength, speedV, 
+                         freqDist, initPhaseTheta, omegaMin, deltaOmega, agentsNum, 
+                         dt, tqdm, savePath, shotsnaps, randomSeed, overWrite)
+        self.positionX = np.concatenate([
+            np.random.random((agentsNum // 4, 2)) * [self.halfBoundaryLength, self.halfBoundaryLength],
+            np.random.random((agentsNum // 4, 2)) * [self.halfBoundaryLength, self.halfBoundaryLength]
+            + [self.halfBoundaryLength, self.halfBoundaryLength],
+            np.random.random((agentsNum // 4, 2)) * [self.halfBoundaryLength, self.halfBoundaryLength]
+            + [self.halfBoundaryLength, 0],
+            np.random.random((agentsNum // 4, 2)) * [self.halfBoundaryLength, self.halfBoundaryLength]
+            + [0, self.halfBoundaryLength]
         ])
     
 
