@@ -3,6 +3,7 @@ import matplotlib.animation as ma
 import matplotlib.pyplot as plt
 from itertools import product
 from typing import List, Tuple, Dict, Any
+from scipy import stats
 import pandas as pd
 import numpy as np
 import numba as nb
@@ -33,13 +34,17 @@ class PhaseLagPatternFormation(Swarmalators2D):
     def __init__(self, strengthK: float, distanceD0: float, phaseLagA0: float,
                  boundaryLength: float = 7, speedV: float = 3.0,
                  freqDist: str = "uniform", initPhaseTheta: np.ndarray = None,
-                 omegaMin: float = 0.1, deltaOmega: float = 1.0,
+                 omegaMin: float = 0., deltaOmega: float = 1.0,
                  agentsNum: int = 1000, dt: float = 0.01,
                  tqdm: bool = False, savePath: str = None, shotsnaps: int = 10,
                  randomSeed: int = 10, overWrite: bool = False) -> None:
         
         assert freqDist in ["uniform", "cauchy"]
         
+        if freqDist == "cauchy":
+            omegaMin = 0.0
+            deltaOmega = 0.0
+
         self.strengthK = strengthK
         self.distanceD0 = distanceD0
         self.phaseLagA0 = phaseLagA0
@@ -644,21 +649,19 @@ class StateAnalysis:
                                      self.model.halfBoundaryLength)
         return np.linalg.norm(deltaX, axis=-1)
 
-    def calc_nearby_edges(self, edgeLenThres: float, classCenters: np.ndarray,
+    def calc_abslute_distance(self, position1: np.ndarray, position2: np.ndarray) -> float:
+        deltaX = position1 - position2
+        return np.linalg.norm(deltaX, axis=-1)
+        
+    def calc_nearby_edges(self, classCenters: np.ndarray, 
+                          edgeLenThres: float = np.inf, maxNeighbors: int = 6, 
+                          zScoreTh: float = None,    # suggestion: 2.0
+                          medianRate: float = None,  # suggestion: 1.2
                           relativeDistance: bool = False) -> Tuple[List[Tuple[int, int]], np.ndarray]:
-        if relativeDistance:
-            classIdxs = np.arange(len(classCenters))
-            edges = np.unique([
-                np.sort(adj) for adj in product(classIdxs, classIdxs) if adj[0] != adj[1]
-            ], axis=0)
-            edges = [
-                edge for edge in edges
-                if self.calc_replative_distance(
-                    classCenters[edge[0]], classCenters[edge[1]]
-                ) < edgeLenThres
-            ]
-            return [tuple(edge) for edge in edges]
-        else:
+        if zScoreTh is not None and medianRate is not None:
+            raise ValueError("Only one of zScoreTh or medianRate can be provided.")
+
+        if not relativeDistance:
             # For plot in periodic boundary conditions
             # classCenters be adjusted to include periodic images
             positionShifts = product(
@@ -672,18 +675,56 @@ class StateAnalysis:
                 )
             classCenters = np.concatenate(periodicCenters, axis=0)
 
-            classIdxs = np.arange(len(classCenters))
-            edges = np.unique([
-                np.sort(adj) for adj in product(classIdxs, classIdxs) if adj[0] != adj[1]
-            ], axis=0)
-            edges = [
-                edge for edge in edges
-                if np.linalg.norm(
-                    classCenters[edge[0]] - classCenters[edge[1]]
-                ) < edgeLenThres
-            ]
-            return [tuple(edge) for edge in edges], classCenters
-        
+        distanceFunc = self.calc_replative_distance if relativeDistance else self.calc_abslute_distance
+
+        classIdxs = np.arange(len(classCenters))
+        edges = np.unique([
+            np.sort(adj) for adj in product(classIdxs, classIdxs) if adj[0] != adj[1]
+        ], axis=0)
+        edgesDistances = np.array([
+            distanceFunc(classCenters[edge[0]], classCenters[edge[1]])
+            for edge in edges
+        ])
+        # Filter edges based on the edge length threshold
+        filteredIdxs = np.array([
+            i for i in range(len(edges))
+            if edgesDistances[i] < edgeLenThres
+        ])
+        if len(filteredIdxs) == 0:
+            if relativeDistance:
+                return []
+            else:
+                return [], classCenters
+        edges = edges[filteredIdxs]
+        edgesDistances = edgesDistances[filteredIdxs]
+        # Filter edges based on the maximum number of neighbors and z-score/median threshold
+        filteredEdges = []
+        for i in range(len(classCenters)):
+            isInEdges = np.array([i in e for e in edges])
+            inEdges = edges[isInEdges]
+            inEdgesDistances = edgesDistances[isInEdges]
+            if len(inEdges) > maxNeighbors:
+                filtered1 = np.argpartition(inEdgesDistances, maxNeighbors)[:maxNeighbors]
+                inEdges = inEdges[filtered1]
+                inEdgesDistances = inEdgesDistances[filtered1]
+            # zScore
+            if zScoreTh is not None:
+                zScores = stats.zscore(inEdgesDistances)
+                inEdges = inEdges[zScores < zScoreTh]
+            # median
+            if medianRate is not None:
+                medianDistance = np.median(inEdgesDistances)
+                inEdges = inEdges[inEdgesDistances < medianRate * medianDistance]
+            filteredEdges.append(inEdges)
+
+        filteredEdges = np.concatenate(filteredEdges, axis=0)
+        filteredEdges = np.unique(filteredEdges, axis=0)
+
+        if relativeDistance:
+            return [tuple(edge) for edge in filteredEdges]
+        else:
+            return [tuple(edge) for edge in filteredEdges], classCenters
+
     def select_classIdx_of_line(self, selectClassIdx: int, classCenters: np.ndarray,
                                 visualAngle: float, span: float) -> List[int]:
         selectClassPos = classCenters[selectClassIdx]
