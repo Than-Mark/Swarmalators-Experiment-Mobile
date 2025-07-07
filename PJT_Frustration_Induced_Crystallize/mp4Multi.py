@@ -48,13 +48,13 @@ from multiprocessing import Pool
 import pandas as pd
 
 
-SAVE_PATH = r"E:\MS_ExperimentData\general"
-MP4_PATH = r"E:\MS_ExperimentData\mp4"
-MP4_TEMP_PATH = r"E:\MS_ExperimentData\mp4_temp"
+# SAVE_PATH = r"E:\MS_ExperimentData\general"
+# MP4_PATH = r"E:\MS_ExperimentData\mp4"
+# MP4_TEMP_PATH = r"E:\MS_ExperimentData\mp4_temp"
 
-# SAVE_PATH = r"D:\MS_ExperimentData\general"
-# MP4_PATH = r"D:\MS_ExperimentData\mp4"
-# MP4_TEMP_PATH = r"D:\MS_ExperimentData\mp4_temp"
+SAVE_PATH = r"D:\MS_ExperimentData\general"
+MP4_PATH = r"D:\MS_ExperimentData\mp4"
+MP4_TEMP_PATH = r"D:\MS_ExperimentData\mp4_temp"
 
 
 def draw_frame(sa: StateAnalysis):
@@ -71,6 +71,8 @@ def draw_frame(sa: StateAnalysis):
     #     np.arange(0 + xShift, sa.model.boundaryLength + xShift + 1),
     #     np.arange(0, sa.model.boundaryLength + 1))
     # plt.tick_params(length=3, direction="in")
+    plt.xlim(4, 6)
+    plt.ylim(4, 6)
 
     plt.savefig(os.path.join(MP4_TEMP_PATH, f"{idx}.png"), bbox_inches='tight', dpi=200)
     plt.close()
@@ -82,9 +84,9 @@ if __name__ == "__main__":
         strengthK=20, distanceD0=1, phaseLagA0=0.6 * np.pi,
         # initPhaseTheta=np.zeros(1000), 
         omegaMin=0, deltaOmega=0,
-        agentsNum=3000, dt=0.005,
+        agentsNum=102, dt=0.001,
         tqdm=True, savePath=SAVE_PATH, shotsnaps=1, 
-        randomSeed=10, overWrite=True
+        randomSeed=9, overWrite=True
     )
 
     # model = PhaseLagPatternFormation1D(strengthK=20, distanceD0=1, phaseLagA0=0.6*np.pi, 
@@ -92,26 +94,26 @@ if __name__ == "__main__":
     #                                    tqdm=True, savePath=SAVE_PATH, shotsnaps=10, 
     #                                    randomSeed=9, overWrite=True)
 
-    # sa = StateAnalysis(model)
-    # subSaList = list()
-    # for i in tqdm(range(0, sa.TNum), desc="Processing data"):
-    #     subSa = StateAnalysis()
-    #     subSa.totalPositionX = [sa.totalPositionX[i]]
-    #     subSa.totalPhaseTheta = [sa.totalPhaseTheta[i]]
-    #     subSa.model = sa.model
-    #     subSa.index = i
-    #     subSa.model = sa.model
-    #     subSaList.append(subSa)
+    sa = StateAnalysis(model)
+    subSaList = list()
+    for i in tqdm(range(0, sa.TNum), desc="Processing data"):
+        subSa = StateAnalysis()
+        subSa.totalPositionX = [sa.totalPositionX[i]]
+        subSa.totalPhaseTheta = [sa.totalPhaseTheta[i]]
+        subSa.model = sa.model
+        subSa.index = i
+        subSa.model = sa.model
+        subSaList.append(subSa)
 
-    # if os.path.exists(MP4_TEMP_PATH):
-    #     shutil.rmtree(MP4_TEMP_PATH)
-    # os.mkdir(MP4_TEMP_PATH)
+    if os.path.exists(MP4_TEMP_PATH):
+        shutil.rmtree(MP4_TEMP_PATH)
+    os.mkdir(MP4_TEMP_PATH)
     
-    # with Pool(10) as p:
-    #     p.map(
-    #         draw_frame,
-    #         tqdm(subSaList, desc="Drawing frames", total=sa.TNum),
-    #     )
+    with Pool(10) as p:
+        p.map(
+            draw_frame,
+            tqdm(subSaList, desc="Drawing frames", total=sa.TNum),
+        )
     
     if os.path.exists(MP4_PATH + rf"\{model}.mp4"):
         os.remove(rf"{MP4_PATH}\{model}.mp4")
