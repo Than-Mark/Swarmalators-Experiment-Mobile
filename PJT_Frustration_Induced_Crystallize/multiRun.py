@@ -63,9 +63,11 @@ if __name__ == "__main__":
     # phaseLags = np.linspace(-1, 1, 21) * np.pi
     phaseLags = [0.6 * np.pi]
     omegaMins = [0]  # np.linspace(1e-5, 3, 21)
-    randomSeed = 10
-    strengthKs = np.linspace(4, 20, 7)  # [20]  # np.linspace(1, 20, 7)
-    distanceD0s = np.linspace(0.3, 1.1, 7)  #  np.linspace(0.1, 3, 7)  # [1]
+    randomSeeds = range(10)
+    # strengthKs = np.linspace(4, 20, 7)  # [20]  # np.linspace(1, 20, 7)
+    strengthKs = [20]
+    # distanceD0s = np.linspace(0.3, 1.1, 7)  #  np.linspace(0.1, 3, 7)  # [1]
+    distanceD0s = [0.56666666]
     deltaOmegas = [1]  # np.linspace(1e-5, 3, 21)  # [1.0]
 
     models = [
@@ -73,15 +75,16 @@ if __name__ == "__main__":
             strengthK=strengthK, distanceD0=distanceD0, phaseLagA0=phaseLag,
             freqDist="uniform", initPhaseTheta=None,
             omegaMin=omegaMin, deltaOmega=deltaOmega, 
-            agentsNum=1000, dt=0.005,
+            agentsNum=2000, dt=0.005,
             tqdm=True, savePath=SAVE_PATH, shotsnaps=10, 
-            randomSeed=randomSeed, overWrite=True
+            randomSeed=randomSeed, overWrite=False
         )
         for strengthK in strengthKs
         for distanceD0 in distanceD0s
         for omegaMin in omegaMins
         for deltaOmega in deltaOmegas
         for phaseLag in phaseLags
+        for randomSeed in randomSeeds
     ]
 
     with Pool(min(len(models), 13)) as p:
