@@ -49,7 +49,7 @@ plt.rcParams['animation.ffmpeg_path'] = "/opt/conda/bin/ffmpeg"
 from PJT_Frustration_Induced_Crystallize.main import *
 from multiprocessing import Pool
 
-SAVE_PATH = r"E:\MS_ExperimentData\general"
+SAVE_PATH = r"F:\MS_ExperimentData\general"
 
 
 # phaseLags = np.linspace(-1, 1, 21) * np.pi
@@ -57,18 +57,18 @@ phaseLags = np.linspace(0, 1, 11) * np.pi
 # phaseLags = [0.6 * np.pi]
 omegaMins = [0]  # np.linspace(1e-5, 3, 21)
 randomSeed = 10
-strengthKs = [20]  # np.linspace(1, 20, 7)
-distanceD0s = [1]  # np.linspace(0.1, 3, 7)
-deltaOmegas = [1]  # np.linspace(1e-5, 3, 21)  # [1.0]
+strengthKs = [16.833333]  # np.linspace(1, 20, 7)
+distanceD0s = [1.55]  # np.linspace(0.1, 3, 7)
+deltaOmegas = [0]  # np.linspace(1e-5, 3, 21)  # [1.0]
 
 models = [
-    ChessboardPhaseLagPatternFormation(
+    PhaseLagPatternFormation(
         strengthK=strengthK, distanceD0=distanceD0, phaseLagA0=phaseLag,
         freqDist="uniform", 
         omegaMin=omegaMin, deltaOmega=deltaOmega, 
-        agentsNum=1000, dt=0.005,
+        agentsNum=2000, dt=0.005,
         tqdm=True, savePath=SAVE_PATH, shotsnaps=10, 
-        randomSeed=randomSeed, overWrite=True
+        randomSeed=randomSeed, overWrite=False
     )
     for strengthK in strengthKs
     for distanceD0 in distanceD0s
@@ -91,7 +91,7 @@ for i, sa in tqdm(enumerate(sas), total=len(sas)):
 
     ax = axs[i]
     index = -1
-    sa.plot_spatial(ax, colorsBy="freq", index=index)
+    sa.plot_spatial(ax, colorsBy="phase", index=index)
     subLetter = chr(97 + i)
     ax.set_xticks([])
     ax.set_yticks([])

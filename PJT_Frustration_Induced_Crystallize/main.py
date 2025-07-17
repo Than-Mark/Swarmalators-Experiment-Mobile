@@ -227,6 +227,47 @@ class PhaseLagPatternFormation(Swarmalators2D):
         )
     
 
+class CellAndSingleParticle(PhaseLagPatternFormation):
+    def __init__(self, strengthK: float, distanceD0: float, phaseLagA0: float,
+                 singleParticleDis: float, singleParticleAngle: float,
+                 boundaryLength: float = 7, speedV: float = 3.0,
+                 agentsNum: int = 100, dt: float = 0.01,
+                 tqdm: bool = False, savePath: str = None, shotsnaps: int = 10,
+                 randomSeed: int = 10, overWrite: bool = False) -> None:
+        super().__init__(strengthK, distanceD0, phaseLagA0, boundaryLength, speedV, 
+                         "uniform", None, 0, 0, agentsNum, 
+                         dt, tqdm, savePath, shotsnaps, randomSeed, overWrite)
+        cellPhase = np.linspace(0, 2 * np.pi, self.agentsNum - 1, endpoint=False)
+        radius = self.speedV / np.abs(self.strengthK * np.sin(self.phaseLagA0))
+        phaseShift = np.pi / 2
+        cellPositionX = (
+            np.ones((self.agentsNum - 1, 2)) * self.halfBoundaryLength +
+            radius * np.array([np.cos(cellPhase + phaseShift), np.sin(cellPhase + phaseShift)]).T
+        )
+        self.positionX[:-1, :] = cellPositionX
+        self.phaseTheta[:-1] = cellPhase
+        self.positionX[-1, :] = (
+            np.array([self.halfBoundaryLength, self.halfBoundaryLength]) + 
+            singleParticleDis * np.array([np.cos(singleParticleAngle), np.sin(singleParticleAngle)])
+        )
+        self.phaseTheta[-1] = np.pi
+
+        self.singleParticleDis = singleParticleDis
+        self.singleParticleAngle = singleParticleAngle
+
+    def __str__(self):
+        return (
+            f"{self.__class__.__name__}("
+            f"strengthK={self.strengthK:.3f},distanceD0={self.distanceD0:.3f},"
+            f"phaseLagA0={self.phaseLagA0:.3f},"
+            f"sPD={self.singleParticleDis:.3f},sPA={self.singleParticleAngle:.3f},"
+            f"boundaryLength={self.boundaryLength:.1f},speedV={self.speedV:.1f},"
+            f"agentsNum={self.agentsNum},dt={self.dt:.3f},"
+            f"shotsnaps={self.shotsnaps},randomSeed={self.randomSeed}"
+            ")"
+        )
+    
+
 class CommonDistPhaseLagPatternFormation(PhaseLagPatternFormation):
     def __init__(self, strengthK: float, distanceD0: float, phaseLagA0: float,
                  boundaryLength: float = 7, speedV: float = 3.0,
@@ -675,7 +716,7 @@ class StateAnalysis:
     
         return newClasses
     
-    def calc_replative_distance(self, position1: np.ndarray, position2: np.ndarray) -> float:
+    def calc_replative_distance(self, position1: np.ndarray, position2: np.ndarray) -> float | np.ndarray:
         deltaX = self.model._delta_x(position1, position2, 
                                      self.model.boundaryLength, 
                                      self.model.halfBoundaryLength)
@@ -684,81 +725,9 @@ class StateAnalysis:
     def calc_abslute_distance(self, position1: np.ndarray, position2: np.ndarray) -> float:
         deltaX = position1 - position2
         return np.linalg.norm(deltaX, axis=-1)
-        
-    # def calc_nearby_edges(self, classCenters: np.ndarray, 
-    #                       edgeLenThres: float = np.inf, maxNeighbors: int = 6, 
-    #                       zScoreTh: float = None,    # suggestion: 2.0
-    #                       medianRate: float = None,  # suggestion: 1.2
-    #                       relativeDistance: bool = False) -> Tuple[List[Tuple[int, int]], np.ndarray]:
-    #     if zScoreTh is not None and medianRate is not None:
-    #         raise ValueError("Only one of zScoreTh or medianRate can be provided.")
-
-    #     if not relativeDistance:
-    #         # For plot in periodic boundary conditions
-    #         # classCenters be adjusted to include periodic images
-    #         positionShifts = product(
-    #             [-self.model.boundaryLength, 0, self.model.boundaryLength],
-    #             [-self.model.boundaryLength, 0, self.model.boundaryLength]
-    #         )
-    #         periodicCenters = []
-    #         for xShift, yShift in positionShifts:
-    #             periodicCenters.append(
-    #                 np.array([classCenters[:, 0] + xShift, classCenters[:, 1] + yShift]).T
-    #             )
-    #         classCenters = np.concatenate(periodicCenters, axis=0)
-
-    #     distanceFunc = self.calc_replative_distance if relativeDistance else self.calc_abslute_distance
-
-    #     classIdxs = np.arange(len(classCenters))
-    #     edges = np.unique([
-    #         np.sort(adj) for adj in product(classIdxs, classIdxs) if adj[0] != adj[1]
-    #     ], axis=0)
-    #     edgesDistances = np.array([
-    #         distanceFunc(classCenters[edge[0]], classCenters[edge[1]])
-    #         for edge in edges
-    #     ])
-    #     # Filter edges based on the edge length threshold
-    #     filteredIdxs = np.array([
-    #         i for i in range(len(edges))
-    #         if edgesDistances[i] < edgeLenThres
-    #     ])
-    #     if len(filteredIdxs) == 0:
-    #         if relativeDistance:
-    #             return []
-    #         else:
-    #             return [], classCenters
-    #     edges = edges[filteredIdxs]
-    #     edgesDistances = edgesDistances[filteredIdxs]
-    #     # Filter edges based on the maximum number of neighbors and z-score/median threshold
-    #     filteredEdges = []
-    #     for i in range(len(classCenters)):
-    #         isInEdges = np.array([i in e for e in edges])
-    #         inEdges = edges[isInEdges]
-    #         inEdgesDistances = edgesDistances[isInEdges]
-    #         if len(inEdges) > maxNeighbors:
-    #             filtered1 = np.argpartition(inEdgesDistances, maxNeighbors)[:maxNeighbors]
-    #             inEdges = inEdges[filtered1]
-    #             inEdgesDistances = inEdgesDistances[filtered1]
-    #         # zScore
-    #         if zScoreTh is not None:
-    #             zScores = stats.zscore(inEdgesDistances)
-    #             inEdges = inEdges[zScores < zScoreTh]
-    #         # median
-    #         if medianRate is not None:
-    #             medianDistance = np.median(inEdgesDistances)
-    #             inEdges = inEdges[inEdgesDistances < medianRate * medianDistance]
-    #         filteredEdges.append(inEdges)
-
-    #     filteredEdges = np.concatenate(filteredEdges, axis=0)
-    #     filteredEdges = np.unique(filteredEdges, axis=0)
-
-    #     if relativeDistance:
-    #         return [tuple(edge) for edge in filteredEdges]
-    #     else:
-    #         return [tuple(edge) for edge in filteredEdges], classCenters
 
     def calc_nearby_edges(self, classCenters: np.ndarray,
-                          stdMulti: float = 2.0, 
+                          stdMulti: float = 0.3, 
                           relativeDistance: bool = False) -> Tuple[List[Tuple[int, int]], np.ndarray]:
 
         # For plot in periodic boundary conditions
