@@ -797,3 +797,76 @@ class StateAnalysis:
             _, phaseTheta = self.get_state(lookIdx)
         
         return np.abs(np.mean(np.exp(1j * phaseTheta)))
+    
+
+def calc_lattice_constants(sa: StateAnalysis, plot: bool = False, lookIdx: int = -1):
+
+    sa: StateAnalysis
+    model = sa.model
+    shift = np.array([0., 0.])
+    analysisRadius = model.speedV / np.abs(model.strengthK * np.sin(model.phaseLagA0))
+
+    classes, centers = sa.calc_classes_and_centers(classDistance=analysisRadius, lookIdx=lookIdx)
+    if len(classes) > model.agentsNum * 0.2:
+        # print(f"Too many classes: {len(classes)} > {model.agentsNum * 0.2}, skipping.")
+        return [], []
+    numInClasses = np.array([len(c) for c in classes])
+    # zScoreNum = stats.zscore(numInClasses)
+    # classes = [classes[c] for c in range(len(classes)) 
+    #            if (zScoreNum[c] > -0.4) and (numInClasses[c] > 10)]
+    numThres = np.median(numInClasses[numInClasses > 10]) * 0.
+    classes = [classes[c] for c in range(len(classes))
+               if (numInClasses[c] > max(numThres, 10))]
+    centers = np.mod(centers + shift, model.boundaryLength)
+    if len(classes) <= 1:
+        # print("Not enough classes, skipping.")
+        return [], []
+
+    classCenters: List[np.ndarray] = []
+    for c in classes:
+        singleClassCenters = centers[c]
+
+        maxDeltaX = np.abs(singleClassCenters[:, 0] - singleClassCenters[:, 0, np.newaxis]).max()
+        subXShift = model.halfBoundaryLength if maxDeltaX > model.halfBoundaryLength else 0
+        maxDeltaY = np.abs(singleClassCenters[:, 1] - singleClassCenters[:, 1, np.newaxis]).max()
+        subYShift = model.halfBoundaryLength if maxDeltaY > model.halfBoundaryLength else 0
+
+        singleClassCenters = np.mod(singleClassCenters - np.array([subXShift, subYShift]), model.boundaryLength)
+        classCenter = np.mod(singleClassCenters.mean(axis=0) + np.array([subXShift, subYShift]), model.boundaryLength)
+        classCenters.append(classCenter)
+    classCenters: np.ndarray = np.array(classCenters)
+
+    edges, ajdClassCenters = sa.calc_nearby_edges(
+        classCenters=classCenters, 
+        stdMulti=0.3,
+        relativeDistance=False
+    )
+
+    classAnalRadius = list()
+
+    for _, oscIdx in enumerate(classes):
+        freqOmega: np.ndarray = sa.model.freqOmega[oscIdx]
+        meanFreq = freqOmega.mean()
+        analRadius = model.speedV / np.abs(meanFreq - model.strengthK * np.sin(model.phaseLagA0))
+        
+        classAnalRadius.append(analRadius)
+
+    classAnalRadius = np.array(classAnalRadius)
+    edgeDistances = np.array([
+        sa.calc_replative_distance(ajdClassCenters[edge[0]], ajdClassCenters[edge[1]]) 
+        for edge in edges
+    ])
+
+    if plot:
+        sa.plot_spatial(colorsBy="phase", index=-1, shift=shift)
+        plt.scatter(
+            classCenters[:, 0], classCenters[:, 1],
+            facecolor="white", s=30, edgecolor="black", lw=1.5
+        )
+        for edge in edges:
+            plt.plot(ajdClassCenters[edge, 0], ajdClassCenters[edge, 1],
+                    color="black", lw=1.2, alpha=0.3, linestyle=(0, (10, 2)), zorder=0)
+
+    # print(len(classes))
+
+    return classAnalRadius, edgeDistances
