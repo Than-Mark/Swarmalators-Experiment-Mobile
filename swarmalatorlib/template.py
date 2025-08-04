@@ -215,7 +215,7 @@ class Swarmalators1D(Swarmalators):
 
         cbar = plt.colorbar(ticks=[-np.pi, 0, np.pi])
         cbar.ax.set_ylim(-np.pi, np.pi)
-        cbar.ax.set_yticklabels(['$-\pi$', '$0$', '$\pi$'])
+        cbar.ax.set_yticklabels([r'$-\pi$', r'$0$', r'$\pi$'])
 
 
     def update_temp(self):

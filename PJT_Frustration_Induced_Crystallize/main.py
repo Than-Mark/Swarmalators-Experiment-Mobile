@@ -190,7 +190,7 @@ class PhaseLagPatternFormation(Swarmalators2D):
             self.store.append(key="positionX", value=pd.DataFrame(self.positionX))
             self.store.append(key="phaseTheta", value=pd.DataFrame(self.phaseTheta))
     
-    def plot(self, ax: plt.Axes = None, colorsBy: str = "freq"):
+    def plot(self, ax: plt.Axes = None, colorsBy: str = "phase"):
         if ax is None:
             _, ax = plt.subplots(figsize=(5, 5))
         
@@ -510,7 +510,7 @@ class PhaseLagPatternFormation1D(PhaseLagPatternFormation):
         plt.tick_params(direction='in')
         plt.scatter(np.full(self.agentsNum, -2), np.full(self.agentsNum, -2),
                     c=self.phaseTheta, cmap=new_cmap, alpha=0.8, vmin=0, vmax=2*np.pi)
-        plt.colorbar(ticks=[0, np.pi, 2*np.pi], ax=ax).ax.set_yticklabels(['$0$', '$\pi$', '$2\pi$'])
+        plt.colorbar(ticks=[0, np.pi, 2*np.pi], ax=ax).ax.set_yticklabels([r'$0$', r'$\pi$', r'$2\pi$'])
 
 
 class StateAnalysis:
@@ -546,7 +546,7 @@ class StateAnalysis:
         return positionX, phaseTheta
     
     def plot_spatial(self, ax: plt.Axes = None, 
-                     colorsBy: str = "freq", index: int = -1, 
+                     colorsBy: str = "phase", index: int = -1, 
                      shift: np.ndarray = np.array([0, 0])):
         assert colorsBy in ["freq", "phase"], "colorsBy must be 'freq' or 'phase'"
 
@@ -613,7 +613,7 @@ class StateAnalysis:
         plt.tick_params(direction='in')
         plt.scatter(np.full(self.model.agentsNum, -2), np.full(self.model.agentsNum, -2),
                     c=phaseTheta, cmap=new_cmap, alpha=0.8, vmin=0, vmax=2*np.pi)
-        plt.colorbar(ticks=[0, np.pi, 2*np.pi], ax=ax).ax.set_yticklabels(['$0$', '$\pi$', '$2\pi$'])
+        plt.colorbar(ticks=[0, np.pi, 2*np.pi], ax=ax).ax.set_yticklabels([r'$0$', r'$\pi$', r'$2\pi$'])
 
     def check_state_input(self, positionX: np.ndarray = None, phaseTheta: np.ndarray = None,
                           lookIdx: int = -1) -> Tuple[np.ndarray, np.ndarray]:
@@ -798,6 +798,24 @@ class StateAnalysis:
         
         return np.abs(np.mean(np.exp(1j * phaseTheta)))
     
+    def calc_order_parameter_Ra(self, phaseTheta: np.ndarray = None,
+                                    lookIdx: int = -1, ajdDistance: float = 1) -> float:
+        if phaseTheta is None:
+            positionX, phaseTheta = self.get_state(lookIdx)
+
+        adjacent = (
+            self.calc_replative_distance(positionX, positionX[:, np.newaxis])
+            <= ajdDistance
+        )
+        Rs = np.zeros(phaseTheta.shape[0])
+        for i in range(phaseTheta.shape[0]):
+            if not np.any(adjacent[i]):
+                continue
+            nearbyPhases = phaseTheta[adjacent[i]]
+            Rs[i] = np.abs(np.mean(np.exp(1j * nearbyPhases)))
+
+        return Rs.mean()
+
 
 def calc_lattice_constants(sa: StateAnalysis, plot: bool = False, lookIdx: int = -1):
 
