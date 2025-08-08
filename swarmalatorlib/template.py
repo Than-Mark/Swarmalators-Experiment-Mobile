@@ -4,6 +4,7 @@ import pandas as pd
 import numba as nb
 import numpy as np
 import warnings
+import json
 import sys
 import os
 
@@ -15,6 +16,11 @@ else:
 new_cmap = mcolors.LinearSegmentedColormap.from_list(
     "new", plt.cm.hsv(np.linspace(0, 1, 256)) * 0.85, N=256
 )
+
+with open("../swarmalatorlib/hex_colors.json", "r", encoding="utf-8") as f:
+    hexColors = json.load(f)
+hexCmap = mcolors.LinearSegmentedColormap.from_list("cmap", hexColors)
+
 if os.path.exists("/opt/conda/bin/ffmpeg"):
     plt.rcParams['animation.ffmpeg_path'] = "/opt/conda/bin/ffmpeg"
 else:
