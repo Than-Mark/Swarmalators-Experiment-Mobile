@@ -227,6 +227,50 @@ class PhaseLagPatternFormation(Swarmalators2D):
         )
     
 
+class PhaseLagPatternFormation05pi(PhaseLagPatternFormation):
+    def __init__(self, strengthK: float, distanceD0: float,
+                 boundaryLength: float = 7, speedV: float = 3.0,
+                 agentsNum: int = 100, dt: float = 0.01,
+                 tqdm: bool = False, savePath: str = None, shotsnaps: int = 10,
+                 randomSeed: int = 10, overWrite: bool = False) -> None:
+        super().__init__(strengthK, distanceD0, 0.5 * np.pi, boundaryLength, speedV, 
+                         "uniform", None, 0, 0, agentsNum, 
+                         dt, tqdm, savePath, shotsnaps, randomSeed, overWrite)
+    
+    @staticmethod
+    @nb.njit
+    def _calc_dot_phase2(positionX: np.ndarray, phaseTheta: np.ndarray, 
+                         freqOmega: np.ndarray, params: Tuple[float]) -> np.ndarray:
+        agentsNum = positionX.shape[0]
+        boundaryLength, halfBoundaryLength, distanceD0, strengthK, phaseLagA0 = params
+
+        coupling = np.zeros(agentsNum)
+        for i in range(agentsNum):
+            xDiff = np.abs(positionX[:, 0] - positionX[i, 0])
+            yDiff = np.abs(positionX[:, 1] - positionX[i, 1])
+            neighborIdxs = np.where(
+                (xDiff < distanceD0) | (boundaryLength - xDiff < distanceD0) & 
+                (yDiff < distanceD0) | (boundaryLength - yDiff < distanceD0)
+            )[0]
+            if neighborIdxs.size == 0:
+                continue
+
+            subX = positionX[i] - positionX[neighborIdxs]
+            deltaX = positionX[i] - (
+                positionX[neighborIdxs] * (-halfBoundaryLength <= subX) * (subX <= halfBoundaryLength) + 
+                (positionX[neighborIdxs] - boundaryLength) * (subX < -halfBoundaryLength) + 
+                (positionX[neighborIdxs] + boundaryLength) * (subX > halfBoundaryLength)
+            )
+            distance = np.sqrt(np.sum(deltaX**2, axis=1))
+            A = np.where(distance <= distanceD0)[0]
+            if A.size == 0:
+                continue
+
+            deltaTheta = phaseTheta[neighborIdxs][A] - phaseTheta[i]
+            coupling[i] = np.mean(np.cos(deltaTheta)) - 1
+        return strengthK * coupling + freqOmega
+    
+
 class CellAndSingleParticle(PhaseLagPatternFormation):
     def __init__(self, strengthK: float, distanceD0: float, phaseLagA0: float,
                  singleParticleDis: float, singleParticleAngle: float,
