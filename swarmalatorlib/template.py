@@ -275,7 +275,7 @@ class Swarmalators2D(Swarmalators):
 
         cbar = plt.colorbar(sc, ticks=[0, np.pi, 2*np.pi], ax=ax)
         cbar.ax.set_ylim(0, 2*np.pi)
-        cbar.ax.set_yticklabels(['$0$', '$\pi$', '$2\pi$'])
+        cbar.ax.set_yticklabels([r'$0$', r'$\pi$', r'$2\pi$'])
 
     def update_temp(self):
         self.temp["deltaTheta"] = self.deltaTheta
