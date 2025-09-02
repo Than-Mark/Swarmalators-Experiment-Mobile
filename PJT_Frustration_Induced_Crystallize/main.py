@@ -707,6 +707,30 @@ class StateAnalysis:
         classes = self._calc_classes(centers, classDistance, totalDistances)
         return classes, centers
     
+    def calc_classes_based_position(self, classDistance: float = 0.1,
+                                    positionX: np.ndarray = None,
+                                    phaseTheta: np.ndarray = None,
+                                    lookIdx: int = -1, 
+                                    withPhase: bool = False) -> Tuple[List[List[int]], np.ndarray]:
+        positionX, phaseTheta = self.check_state_input(positionX, phaseTheta, lookIdx)
+
+        if withPhase:
+            adjPositionX = np.concatenate([
+                positionX, 
+                phaseTheta.reshape(-1, 1) / (np.pi * 2) * self.model.boundaryLength
+            ], axis=1)
+        else:
+            adjPositionX = positionX
+
+        deltaX = self.model._delta_x(
+            adjPositionX, adjPositionX[:, np.newaxis], 
+            self.model.boundaryLength, self.model.halfBoundaryLength
+        )
+        totalDistances = (deltaX ** 2).sum(axis=-1) ** 0.5
+
+        classes = self._calc_classes(adjPositionX, classDistance, totalDistances)
+        return classes, positionX
+    
     def calc_classes(self, classDistance: float = 0.1,
                      positionX: np.ndarray = None,
                      phaseTheta: np.ndarray = None,
