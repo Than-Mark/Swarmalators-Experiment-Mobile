@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 import numba as nb
 import imageio
+import json
 import sys
 import os
 import shutil
@@ -25,6 +26,9 @@ cmap = mcolors.LinearSegmentedColormap.from_list("cmap", colors)
 new_cmap = mcolors.LinearSegmentedColormap.from_list(
     "new", plt.cm.hsv(np.linspace(0, 1, 256)) * 0.85, N=256
 )
+with open("../swarmalatorlib/hex_colors.json", "r", encoding="utf-8") as f:
+    hexColors = json.load(f)
+hexCmap = mcolors.LinearSegmentedColormap.from_list("cmap", hexColors)
 
 sys.path.append("..")
 from swarmalatorlib.template import Swarmalators2D
@@ -200,18 +204,18 @@ class PhaseLagPatternFormation(Swarmalators2D):
                 ["#414CC7"] * (self.freqOmega < 0).sum()
             )
         elif colorsBy == "phase":
-            colors = [cmap(i) for i in
+            colors = [hexCmap(i) for i in
                 np.floor(256 - self.phaseTheta / (2 * np.pi) * 256).astype(np.int32)
             ]
 
-        plt.quiver(
+        ax.quiver(
             self.positionX[:, 0], self.positionX[:, 1],
             np.cos(self.phaseTheta), np.sin(self.phaseTheta), 
             scale_units='inches', scale=15.0, width=0.002,
             color=colors
         )
-        plt.xlim(0, self.boundaryLength)
-        plt.ylim(0, self.boundaryLength)
+        ax.set_xlim(0, self.boundaryLength)
+        ax.set_ylim(0, self.boundaryLength)
 
     def __str__(self):
         return (
@@ -615,7 +619,7 @@ class StateAnalysis:
                 ["#414CC7"] * (self.model.freqOmega < 0).sum()
             )
         elif colorsBy == "phase":
-            colors = [cmap(i) for i in
+            colors = [hexCmap(i) for i in
                 np.floor(256 - phaseTheta / (2 * np.pi) * 256).astype(np.int32)
             ]
 
