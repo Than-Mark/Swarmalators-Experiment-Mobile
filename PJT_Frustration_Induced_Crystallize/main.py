@@ -788,7 +788,7 @@ class StateAnalysis:
     
         return newClasses
     
-    def calc_replative_distance(self, position1: np.ndarray, position2: np.ndarray) -> float | np.ndarray:
+    def calc_replative_distance(self, position1: np.ndarray, position2: np.ndarray):  #  -> float | np.ndarray
         deltaX = self.model._delta_x(position1, position2, 
                                      self.model.boundaryLength, 
                                      self.model.halfBoundaryLength)
