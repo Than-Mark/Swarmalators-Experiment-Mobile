@@ -52,9 +52,10 @@ SAVE_PATH = r"F:\MS_ExperimentData\general"
 
 
 def run_model(model: PhaseLagPatternFormation):
-    model.run(3000)
+    # model.run(3000)
     # model.run(40000)
-    # model.run(80000)
+    # model.run(60000)
+    model.run(80000)
     # model.run(160000)
     # model.run(320000)
     # model.run(640000)
@@ -62,18 +63,20 @@ def run_model(model: PhaseLagPatternFormation):
 
 if __name__ == "__main__":
     # phaseLags = np.linspace(-1, 1, 21) * np.pi
-    phaseLags = np.linspace(0, 1, 11) * np.pi
+    # phaseLags = np.linspace(0, 1, 11) * np.pi
     # phaseLags = [0.75 * np.pi]
-    # phaseLags = [0.6 * np.pi]
+    phaseLags = [0.6 * np.pi]
     omegaMins = [0]  # np.linspace(1e-5, 3, 21)
     # randomSeeds = range(10)
     randomSeeds = [10]
     # strengthKs = np.linspace(4, 20, 7)  # [20]  # 
     # strengthKs = np.linspace(1, 20, 7)
-    strengthKs = [20]
+    # strengthKs = [20]
+    strengthKs = [11]
     # distanceD0s = np.linspace(0.3, 1.1, 7)  #  np.linspace(0.1, 3, 7)  # [1]
     distanceD0s = [1]
-    deltaOmegas = [0]  # np.linspace(1e-5, 3, 21)  # [1.0]
+    # deltaOmegas = [0]  # np.linspace(1e-5, 3, 21)  # [1.0]
+    deltaOmegas = np.linspace(0, 1, 11)
 
     models = [
         PhaseLagPatternFormation(
