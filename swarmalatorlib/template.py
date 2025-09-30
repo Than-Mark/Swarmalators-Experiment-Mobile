@@ -27,7 +27,31 @@ else:
     plt.rcParams['animation.ffmpeg_path'] = "D:/Programs/ffmpeg/bin/ffmpeg.exe"
 
 
+class StateAnalysis:
+    def __init__(self, model):
+        if model is None:
+            return
+        self.model = model
+        
+        targetPath = f"{self.model.savePath}/{self.model}.h5"
+        
+        totalPhaseTheta = pd.read_hdf(targetPath, key="phaseTheta")
+        TNum = totalPhaseTheta.shape[0] // self.model.agentsNum
+        self.TNum = TNum
+        self.totalPhaseTheta = totalPhaseTheta.values.reshape(TNum, self.model.agentsNum)
+
+        totalPositionX = pd.read_hdf(targetPath, key="positionX")
+        self.totalPositionX = totalPositionX.values.reshape(TNum, self.model.agentsNum, 2)
+
+    def get_state(self, index: int = -1):
+        positionX = self.totalPositionX[index]
+        phaseTheta = self.totalPhaseTheta[index]
+
+        return positionX, phaseTheta
+
+
 class Swarmalators:
+    stateAnalysisClass = StateAnalysis
     def __init__(self, agentsNum: int, dt: float, K: float, randomSeed: int = 100,
                  tqdm: bool = False, savePath: str = None, shotsnaps: int = 5, overWrite: bool = False) -> None:
         np.random.seed(randomSeed)
@@ -58,7 +82,7 @@ class Swarmalators:
 
             print(f"{targetPath} already exists, ", end="")
             endTNum = TNum // self.shotsnaps + 2
-            sa = StateAnalysis(self)
+            sa = self.stateAnalysisClass(self)
             if sa.TNum >= endTNum:
                 print(f"already has {sa.TNum} snapshots, no need to run again.")
                 return False
@@ -170,7 +194,7 @@ class Swarmalators:
             return 
 
         if self.tqdm:
-            iterRange = tqdm(range(self.counts, TNum))
+            iterRange = tqdm(range(self.counts, TNum), ncols=100)
         else:
             iterRange = range(self.counts, TNum)
 
@@ -351,25 +375,3 @@ class Swarmalators2D(Swarmalators):
 
         return answer
     
-
-class StateAnalysis:
-    def __init__(self, model: Swarmalators2D = None):
-        if model is None:
-            return
-        self.model = model
-        
-        targetPath = f"{self.model.savePath}/{self.model}.h5"
-        
-        totalPhaseTheta = pd.read_hdf(targetPath, key="phaseTheta")
-        TNum = totalPhaseTheta.shape[0] // self.model.agentsNum
-        self.TNum = TNum
-        self.totalPhaseTheta = totalPhaseTheta.values.reshape(TNum, self.model.agentsNum)
-
-        totalPositionX = pd.read_hdf(targetPath, key="positionX")
-        self.totalPositionX = totalPositionX.values.reshape(TNum, self.model.agentsNum, 2)
-
-    def get_state(self, index: int = -1):
-        positionX = self.totalPositionX[index]
-        phaseTheta = self.totalPhaseTheta[index]
-
-        return positionX, phaseTheta
