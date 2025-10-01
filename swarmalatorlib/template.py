@@ -9,7 +9,8 @@ import sys
 import os
 
 if "ipykernel_launcher.py" in sys.argv[0]:
-    from tqdm.notebook import tqdm
+    # from tqdm.notebook import tqdm
+    from tqdm import tqdm
 else:
     from tqdm import tqdm
 

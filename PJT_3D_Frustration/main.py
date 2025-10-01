@@ -16,7 +16,8 @@ import shutil
 randomSeed = 10
 
 if "ipykernel_launcher.py" in sys.argv[0]:
-    from tqdm.notebook import tqdm
+    # from tqdm.notebook import tqdm
+    from tqdm import tqdm
 else:
     from tqdm import tqdm
 
