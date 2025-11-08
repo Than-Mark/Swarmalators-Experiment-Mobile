@@ -141,7 +141,7 @@ class DensitySense(Swarmalators2D):
                 continue
 
             deltaTheta = phaseTheta[neighborIdxs][A] - phaseTheta[i]
-            coupling[i] = np.sum(np.sin(deltaTheta)) * (alphaTh - A.size / agentsNum)
+            coupling[i] = np.sum(np.sin(deltaTheta)) * np.sign(alphaTh - A.size / agentsNum)
         multi = strengthK / (np.pi * distanceD0**2)
         return freqOmega + multi * coupling
 
@@ -207,7 +207,7 @@ class DensitySense(Swarmalators2D):
         return (
             f"{self.__class__.__name__}("
             f"strengthK={self.strengthK:.3f},distanceD0={self.distanceD0:.3f},"
-            f"Nth={self.alphaTh},boundaryLength={self.boundaryLength:.1f},"
+            f"Ath={self.alphaTh},boundaryLength={self.boundaryLength:.1f},"
             f"speedV={self.speedV:.1f},freqDist={self.freqDist},"
             f"{'initPhaseTheta,' if self.initPhaseTheta is not None else ''}"
             f"omegaMin={self.omegaMin:.3f},deltaOmega={self.deltaOmega:.3f},"
@@ -215,6 +215,42 @@ class DensitySense(Swarmalators2D):
             f"shotsnaps={self.shotsnaps},randomSeed={self.randomSeed}"
             ")"
         )
+    
+
+class MeanFieldCoup(DensitySense):
+    @staticmethod
+    @nb.njit
+    def _calc_dot_phase2(positionX: np.ndarray, phaseTheta: np.ndarray, 
+                         freqOmega: np.ndarray, params: Tuple[float]) -> np.ndarray:
+        agentsNum = positionX.shape[0]
+        boundaryLength, halfBoundaryLength, distanceD0, strengthK, alphaTh = params
+
+        coupling = np.zeros(agentsNum)
+        for i in range(agentsNum):
+            xDiff = np.abs(positionX[:, 0] - positionX[i, 0])
+            yDiff = np.abs(positionX[:, 1] - positionX[i, 1])
+            neighborIdxs = np.where(
+                (xDiff < distanceD0) | (boundaryLength - xDiff < distanceD0) & 
+                (yDiff < distanceD0) | (boundaryLength - yDiff < distanceD0)
+            )[0]
+            if neighborIdxs.size == 0:
+                continue
+
+            subX = positionX[i] - positionX[neighborIdxs]
+            deltaX = positionX[i] - (
+                positionX[neighborIdxs] * (-halfBoundaryLength <= subX) * (subX <= halfBoundaryLength) + 
+                (positionX[neighborIdxs] - boundaryLength) * (subX < -halfBoundaryLength) + 
+                (positionX[neighborIdxs] + boundaryLength) * (subX > halfBoundaryLength)
+            )
+            distance = np.sqrt(np.sum(deltaX**2, axis=1))
+            A = np.where(distance <= distanceD0)[0]
+            if A.size == 0:
+                continue
+
+            deltaTheta = phaseTheta[neighborIdxs][A] - phaseTheta[i]
+            coupling[i] = np.mean(np.sin(deltaTheta)) * np.sign(alphaTh - A.size / agentsNum)
+
+        return freqOmega + coupling * strengthK
     
 
 class StateAnalysis:
