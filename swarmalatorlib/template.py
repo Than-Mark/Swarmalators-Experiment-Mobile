@@ -83,7 +83,13 @@ class Swarmalators:
 
             print(f"{targetPath} already exists, ", end="")
             endTNum = TNum // self.shotsnaps + 2
-            sa = self.stateAnalysisClass(self)
+            try:
+                sa = self.stateAnalysisClass(self)
+            except ValueError:
+                print("but cannot read the file, will overwrite.")
+                os.remove(targetPath)
+                self.store = pd.HDFStore(targetPath)
+                return True
             if sa.TNum >= endTNum:
                 print(f"already has {sa.TNum} snapshots, no need to run again.")
                 return False
