@@ -30,6 +30,10 @@ with open("../swarmalatorlib/hex_colors.json", "r", encoding="utf-8") as f:
     hexColors = json.load(f)
 hexCmap = mcolors.LinearSegmentedColormap.from_list("cmap", hexColors)
 
+colors = ["red", "#414CC7"]
+cmapRedBlue = mcolors.LinearSegmentedColormap.from_list("cmapRedBlue", colors)
+from matplotlib.colors import Normalize
+
 sys.path.append("..")
 from swarmalatorlib.template import Swarmalators2D
 
@@ -603,6 +607,22 @@ class StateAnalysis:
         else:
             self.plot_spatial_2D(ax, colorsBy, index, shift)
 
+    @staticmethod
+    def remove_outliers_iqr(data: np.ndarray) -> pd.Series:
+        data_series = pd.Series(data)
+        
+        Q1 = data_series.quantile(0.25)
+        Q3 = data_series.quantile(0.75)
+        IQR = Q3 - Q1
+        
+        lower_bound = Q1 - 1.5 * IQR
+        upper_bound = Q3 + 1.5 * IQR
+        
+        # 返回非极端值
+        filtered_data = data_series[(data_series >= lower_bound) & (data_series <= upper_bound)]
+        
+        return filtered_data
+
     def plot_spatial_2D(self, ax: plt.Axes = None, 
                      colorsBy: str = "freq", index: int = -1, 
                      shift: np.ndarray = np.array([0, 0])):
@@ -614,10 +634,13 @@ class StateAnalysis:
             _, ax = plt.subplots(figsize=(5, 5))
 
         if colorsBy == "freq":
-            colors = (
-                ["red"] * (self.model.freqOmega >= 0).sum() + 
-                ["#414CC7"] * (self.model.freqOmega < 0).sum()
-            )
+            # colors = (
+            #     ["red"] * (self.model.freqOmega >= 0).sum() + 
+            #     ["#414CC7"] * (self.model.freqOmega < 0).sum()
+            # )
+            bound = np.max(np.abs(self.remove_outliers_iqr(self.model.freqOmega)))
+            norm = Normalize(-bound, bound)
+            colors = [cmapRedBlue(norm(f)) for f in self.model.freqOmega]
         elif colorsBy == "phase":
             colors = [hexCmap(i) for i in
                 np.floor(256 - phaseTheta / (2 * np.pi) * 256).astype(np.int32)
