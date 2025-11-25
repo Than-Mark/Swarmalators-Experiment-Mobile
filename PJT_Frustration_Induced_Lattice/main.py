@@ -237,6 +237,54 @@ class PhaseLagPatternFormation(Swarmalators2D):
         )
     
 
+class PhaseLagPatternFormationNoise(PhaseLagPatternFormation):
+    def __init__(self, strengthK: float, distanceD0: float, phaseLagA0: float,
+                 boundaryLength: float = 7, speedV: float = 3.0,
+                 freqDist: str = "uniform", initPhaseTheta: np.ndarray = None,
+                 omegaMin: float = 0., deltaOmega: float = 0.0,
+                 noiseD: float = 0.01, noiseDr: float = 0.01,
+                 agentsNum: int = 1000, dt: float = 0.01,
+                 tqdm: bool = False, savePath: str = None, shotsnaps: int = 10,
+                 randomSeed: int = 10, overWrite: bool = False) -> None:
+        super().__init__(strengthK, distanceD0, phaseLagA0, boundaryLength, speedV, 
+                         freqDist, initPhaseTheta, omegaMin, deltaOmega, agentsNum, 
+                         dt, tqdm, savePath, shotsnaps, randomSeed, overWrite)
+        self.noiseD = noiseD
+        self.noiseDr = noiseDr
+    
+    @property
+    def dotPosition(self) -> np.ndarray:
+        baseDotPosition = super().dotPosition
+        if self.noiseD == 0:
+            return baseDotPosition
+        eta = np.random.randn(self.agentsNum, 2)
+        noise = np.sqrt(2 * self.noiseD / self.dt) * eta
+        return baseDotPosition + noise
+
+    @property
+    def dotPhase(self) -> np.ndarray:
+        baseDotPhase = super().dotPhase
+        if self.noiseDr == 0:
+            return baseDotPhase
+        eta = np.random.randn(self.agentsNum)
+        noise = np.sqrt(2 * self.noiseDr / self.dt) * eta
+        return baseDotPhase + noise
+
+    def __str__(self):
+        return (
+            f"{self.__class__.__name__}("
+            f"strengthK={self.strengthK:.3f},distanceD0={self.distanceD0:.3f},"
+            f"phaseLagA0={self.phaseLagA0:.3f},boundaryLength={self.boundaryLength:.1f},"
+            f"speedV={self.speedV:.1f},freqDist={self.freqDist},"
+            f"{'initPhaseTheta,' if self.initPhaseTheta is not None else ''}"
+            f"D={self.noiseD:.4f},Dr={self.noiseDr:.4f},"
+            f"omegaMin={self.omegaMin:.3f},deltaOmega={self.deltaOmega:.3f},"
+            f"agentsNum={self.agentsNum},dt={self.dt:.3f},"
+            f"shotsnaps={self.shotsnaps},randomSeed={self.randomSeed}"
+            ")"
+        )
+
+
 class PhaseLagPatternFormation05pi(PhaseLagPatternFormation):
     def __init__(self, strengthK: float, distanceD0: float,
                  boundaryLength: float = 7, speedV: float = 3.0,
