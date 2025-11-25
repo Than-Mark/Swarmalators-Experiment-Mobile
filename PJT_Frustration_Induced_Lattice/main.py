@@ -47,7 +47,7 @@ class PhaseLagPatternFormation(Swarmalators2D):
                  tqdm: bool = False, savePath: str = None, shotsnaps: int = 10,
                  randomSeed: int = 10, overWrite: bool = False) -> None:
         
-        assert freqDist in ["uniform", "cauchy"]
+        assert freqDist in ["uniform", "cauchy", "gaussian"]
         
         if freqDist == "cauchy":
             omegaMin = 0.0
@@ -78,8 +78,10 @@ class PhaseLagPatternFormation(Swarmalators2D):
             self.phaseTheta = initPhaseTheta
         if freqDist == "uniform":
             posOmega = np.random.uniform(omegaMin, omegaMin + deltaOmega, agentsNum // 2)
-        else:
+        elif freqDist == "cauchy":
             posOmega = np.abs(np.random.standard_cauchy(agentsNum // 2))
+        else:  # freqDist == "gaussian"
+            posOmega = np.random.normal(omegaMin, deltaOmega, agentsNum // 2)
         self.freqOmega = np.concatenate([
             posOmega, -posOmega
         ])
@@ -212,14 +214,14 @@ class PhaseLagPatternFormation(Swarmalators2D):
                 np.floor(256 - self.phaseTheta / (2 * np.pi) * 256).astype(np.int32)
             ]
 
-        ax.quiver(
+        plt.quiver(
             self.positionX[:, 0], self.positionX[:, 1],
             np.cos(self.phaseTheta), np.sin(self.phaseTheta), 
             scale_units='inches', scale=15.0, width=0.002,
             color=colors
         )
-        ax.set_xlim(0, self.boundaryLength)
-        ax.set_ylim(0, self.boundaryLength)
+        plt.xlim(0, self.boundaryLength)
+        plt.ylim(0, self.boundaryLength)
 
     def __str__(self):
         return (
@@ -811,7 +813,7 @@ class StateAnalysis:
     
         return newClasses
     
-    def calc_replative_distance(self, position1: np.ndarray, position2: np.ndarray):  #  -> float | np.ndarray
+    def calc_replative_distance(self, position1: np.ndarray, position2: np.ndarray) -> float | np.ndarray:
         deltaX = self.model._delta_x(position1, position2, 
                                      self.model.boundaryLength, 
                                      self.model.halfBoundaryLength)
