@@ -243,9 +243,21 @@ class VaryingStrengthK(PhaseLagPatternFormation):
                          freqDist, initPhaseTheta, omegaMin, deltaOmega, agentsNum, 
                          dt, tqdm, savePath, shotsnaps, randomSeed, overWrite)
         self.strengthKRange = strengthKRange
+        self.initModel = PhaseLagPatternFormation(
+            strengthKRange[0], distanceD0, phaseLagA0, boundaryLength, speedV, 
+            freqDist, initPhaseTheta, omegaMin, deltaOmega, agentsNum, 
+            dt, tqdm, savePath, shotsnaps, randomSeed, overWrite=False
+        )
         
     def update(self):
         self.strengthK = self.strengthKRange[self.counts]
+        self.dotThetaParams = (
+            self.boundaryLength,
+            self.halfBoundaryLength,
+            self.distanceD0,
+            self.strengthK,
+            self.phaseLagA0,
+        )
 
         dotPos = self.dotPosition
         dotPhase = self.dotPhase
@@ -253,7 +265,50 @@ class VaryingStrengthK(PhaseLagPatternFormation):
         self.positionX = np.mod(self.positionX + dotPos * self.dt, self.boundaryLength)
         self.phaseTheta = np.mod(self.phaseTheta + dotPhase * self.dt, 2 * np.pi)
 
+    def init_store(self, TNum: int) -> bool:
+        if self.savePath is None:
+            self.store = None
+        else:
+            targetPath = f"{self.savePath}/{self}.h5"
+
+            if self.overWrite and os.path.exists(targetPath):
+                os.remove(targetPath)
+
+            if not os.path.exists(targetPath):
+                
+                self.initModel.run(10000)
+                oldSa = StateAnalysis(self.initModel)
+                self.positionX, self.phaseTheta = oldSa.get_state(-1)
+
+                self.store = pd.HDFStore(targetPath)
+                self.append()
+                return True
+
+            print(f"{targetPath} already exists, ", end="")
+            endTNum = TNum // self.shotsnaps + 1
+            try:
+                sa = self.stateAnalysisClass(self)
+            except ValueError:
+                print("but cannot read the file, will overwrite.")
+                os.remove(targetPath)
+                self.store = pd.HDFStore(targetPath)
+                return True
+            if sa.TNum >= endTNum:
+                print(f"already has {sa.TNum} snapshots, no need to run again.")
+                return False
+            print(f"but has only {sa.TNum} snapshots, will continue to run until {endTNum} snapshots.")
+
+            self.positionX, self.phaseTheta = sa.get_state(-1)
+            self.counts = (sa.TNum - 2) * self.shotsnaps + 1
+
+            self.store = pd.HDFStore(targetPath, mode="a")
+
+            
+        self.append()
+        return True
+
     def run(self):
+
         super().run(len(self.strengthKRange))
 
     def __str__(self):

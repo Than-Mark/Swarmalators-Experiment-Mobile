@@ -79,10 +79,11 @@ class Swarmalators:
 
             if not os.path.exists(targetPath):
                 self.store = pd.HDFStore(targetPath)
+                self.append()
                 return True
 
             print(f"{targetPath} already exists, ", end="")
-            endTNum = TNum // self.shotsnaps + 2
+            endTNum = TNum // self.shotsnaps + 1
             try:
                 sa = self.stateAnalysisClass(self)
             except ValueError:
@@ -193,7 +194,6 @@ class Swarmalators:
             self.H, self.G,
             self.K, self.dt
         )
-        self.counts += 1
 
     def run(self, TNum: int):
         
