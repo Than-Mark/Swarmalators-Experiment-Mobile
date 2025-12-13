@@ -48,13 +48,13 @@ from multiprocessing import Pool
 import pandas as pd
 
 
-# SAVE_PATH = r"E:\MS_ExperimentData\general"
-# MP4_PATH = r"E:\MS_ExperimentData\mp4"
-# MP4_TEMP_PATH = r"E:\MS_ExperimentData\mp4_temp"
+SAVE_PATH = r"F:\MS_ExperimentData\general"
+MP4_PATH = r"F:\MS_ExperimentData\mp4"
+MP4_TEMP_PATH = r"F:\MS_ExperimentData\mp4_temp"
 
-SAVE_PATH = r"D:\MS_ExperimentData\general"
-MP4_PATH = r"D:\MS_ExperimentData\mp4"
-MP4_TEMP_PATH = r"D:\MS_ExperimentData\mp4_temp"
+# SAVE_PATH = r"D:\MS_ExperimentData\general"
+# MP4_PATH = r"D:\MS_ExperimentData\mp4"
+# MP4_TEMP_PATH = r"D:\MS_ExperimentData\mp4_temp"
 
 
 def draw_frame(sa: StateAnalysis):
@@ -71,8 +71,8 @@ def draw_frame(sa: StateAnalysis):
     #     np.arange(0 + xShift, sa.model.boundaryLength + xShift + 1),
     #     np.arange(0, sa.model.boundaryLength + 1))
     # plt.tick_params(length=3, direction="in")
-    plt.xlim(4, 6)
-    plt.ylim(4, 6)
+    # plt.xlim(4, 6)
+    # plt.ylim(4, 6)
 
     plt.savefig(os.path.join(MP4_TEMP_PATH, f"{idx}.png"), bbox_inches='tight', dpi=200)
     plt.close()
@@ -81,12 +81,13 @@ def draw_frame(sa: StateAnalysis):
 if __name__ == "__main__":
 
     model = PhaseLagPatternFormation(
-        strengthK=20, distanceD0=1, phaseLagA0=0.6 * np.pi,
-        # initPhaseTheta=np.zeros(1000), 
-        omegaMin=0, deltaOmega=0,
-        agentsNum=102, dt=0.001,
-        tqdm=True, savePath=SAVE_PATH, shotsnaps=1, 
-        randomSeed=9, overWrite=True
+        strengthK=24, distanceD0=0.25, 
+        phaseLagA0=0.6 * np.pi, boundaryLength=7, speedV=3,
+        freqDist="uniform", initPhaseTheta=None,
+        omegaMin=0, deltaOmega=0, 
+        agentsNum=5000, dt=0.005,
+        tqdm=True, savePath=SAVE_PATH, shotsnaps=2, 
+        randomSeed=10, overWrite=False
     )
 
     # model = PhaseLagPatternFormation1D(strengthK=20, distanceD0=1, phaseLagA0=0.6*np.pi, 
@@ -122,7 +123,9 @@ if __name__ == "__main__":
     img = iio.imread(os.path.join(MP4_TEMP_PATH, "0.png"))
     print(img.shape)  # output: (height, width, channels)
 
-    fps = 60
+    speed_factor = 0.5  
+    fps = int(60 * speed_factor)
+
     ffmpeg_command = [
         'ffmpeg',
         '-framerate', str(fps),
