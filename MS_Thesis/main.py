@@ -214,14 +214,14 @@ class PhaseLagPatternFormation(Swarmalators2D):
                 np.floor(256 - self.phaseTheta / (2 * np.pi) * 256).astype(np.int32)
             ]
 
-        plt.quiver(
+        ax.quiver(
             self.positionX[:, 0], self.positionX[:, 1],
             np.cos(self.phaseTheta), np.sin(self.phaseTheta), 
             scale_units='inches', scale=15.0, width=0.002,
             color=colors
         )
-        plt.xlim(0, self.boundaryLength)
-        plt.ylim(0, self.boundaryLength)
+        ax.set_xlim(0, self.boundaryLength)
+        ax.set_ylim(0, self.boundaryLength)
 
     def __str__(self):
         return (
