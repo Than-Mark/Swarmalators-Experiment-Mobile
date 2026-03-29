@@ -468,13 +468,13 @@ class StateAnalysis:
     
         return newClasses
     
-    def calc_replative_distance(self, position1: np.ndarray, position2: np.ndarray):  #  -> float | np.ndarray
+    def calc_relative_distance(self, position1: np.ndarray, position2: np.ndarray):  #  -> float | np.ndarray
         deltaX = self.model._delta_x(position1, position2, 
                                      self.model.boundaryLength, 
                                      self.model.halfBoundaryLength)
         return np.linalg.norm(deltaX, axis=-1)
 
-    def calc_abslute_distance(self, position1: np.ndarray, position2: np.ndarray) -> float:
+    def calc_absolute_distance(self, position1: np.ndarray, position2: np.ndarray) -> float:
         deltaX = position1 - position2
         return np.linalg.norm(deltaX, axis=-1)
 
@@ -556,7 +556,7 @@ class StateAnalysis:
             positionX, phaseTheta = self.get_state(lookIdx)
 
         adjacent = (
-            self.calc_replative_distance(positionX, positionX[:, np.newaxis])
+            self.calc_relative_distance(positionX, positionX[:, np.newaxis])
             <= ajdDistance
         )
         Rs = np.zeros(phaseTheta.shape[0])
@@ -623,7 +623,7 @@ def calc_lattice_constants(sa: StateAnalysis, plot: bool = False, lookIdx: int =
 
     classAnalRadius = np.array(classAnalRadius)
     edgeDistances = np.array([
-        sa.calc_replative_distance(ajdClassCenters[edge[0]], ajdClassCenters[edge[1]]) 
+        sa.calc_relative_distance(ajdClassCenters[edge[0]], ajdClassCenters[edge[1]]) 
         for edge in edges
     ])
 
