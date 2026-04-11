@@ -8,7 +8,6 @@
 *.h5
 *.csv
 *.eps
-test.ipynb
 *.xlsx
 *.npy
 *.parquet
