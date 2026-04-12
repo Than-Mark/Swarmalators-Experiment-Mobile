@@ -3,6 +3,7 @@ import matplotlib.animation as ma
 import matplotlib.pyplot as plt
 from typing import List, Tuple
 from itertools import product
+import numpy.typing as npt
 import pandas as pd
 import numpy as np
 import numba as nb
@@ -205,4 +206,199 @@ class ParticleBasedChemotaxis(Swarmalators2D):
             f"seed{self.randomSeed}"
         )
         
+        return name
+    
+
+class ContinuumChemotaxis(Swarmalators2D): 
+    def __init__(self,
+                 chemoAlpha: float, partiDiffD: float,
+                 prodRateK: float, sinkRateMu: float, chemoDiffDc: float,
+                 boundaryLength: float = 20.0, cellNumInLine: int = 200, agentsNum: int = 2000,
+                 dt: float = 0.01, shotsnaps: int = 10,
+                 tqdm: bool = False, savePath: str = None,
+                 randomSeed: int = 10, overWrite: bool = False) -> None:
+
+        np.random.seed(randomSeed)
+        self.randomSeed = randomSeed
+        self.cellNumInLine = cellNumInLine
+        self.dx = boundaryLength / (cellNumInLine - 1)
+        self.boundaryLength = boundaryLength
+        self.prodRateK = prodRateK
+        self.chemoDiffDc = chemoDiffDc
+        self.dt = dt
+        self.chemoAlpha = chemoAlpha
+        self.partiDiffD = partiDiffD
+        self.shotsnaps = shotsnaps
+        self.tqdm = tqdm
+        self.savePath = savePath
+        self.counts = 0
+        self.overWrite = overWrite
+        self.mu = sinkRateMu
+
+        rho_mean = agentsNum / (boundaryLength ** 2)  # average density
+        self.rho = rho_mean + 0.1 * rho_mean * (np.random.rand(cellNumInLine, cellNumInLine) - 0.5)
+        self.rho = np.abs(self.rho)  # make sure density is non-negative
+        self.c = np.random.rand(cellNumInLine, cellNumInLine)
+
+        self.temp = dict()
+        self.temp["grad_c"] = self.gradC
+        self.temp["grad_rho"] = self.gradRho
+        self.temp["dotC"] = self.dotC
+        self.temp["dotRho"] = self.dotRho
+
+    def plot(self, ax: plt.Axes = None, showField: str = 'both'):
+        if ax is None:
+            if showField == 'both':
+                fig, axs = plt.subplots(1, 2, figsize=(13, 5))
+                ax_rho, ax_c = axs
+            else:
+                _, ax_single = plt.subplots(figsize=(6, 5))
+                if showField == 'rho':
+                    ax_rho = ax_single
+                    ax_c = None
+                else:  # 'c'
+                    ax_c = ax_single
+                    ax_rho = None
+        else:
+            if showField == 'rho':
+                ax_rho, ax_c = ax, None
+            elif showField == 'c':
+                ax_c, ax_rho = ax, None
+            else:
+                raise ValueError("When providing a single ax, showField must be 'rho' or 'c'.")
+
+        extent = (0, self.boundaryLength, 0, self.boundaryLength)
+        if ax_rho is not None:
+            im_rho = ax_rho.imshow(
+                self.rho.T, origin="lower", 
+                cmap=mcolors.LinearSegmentedColormap.from_list("my_colormap", ["#FFFFFF", "#0077FF"]),
+                extent=extent, aspect="equal"
+            )
+            ax_rho.set_title(r'Particle Density $\rho$')
+            plt.colorbar(im_rho, ax=ax_rho)
+            ax_rho.set_xlabel('x')
+            ax_rho.set_ylabel('y')
+
+        if ax_c is not None:
+            im_c = ax_c.imshow(
+                self.c.T, origin="lower", 
+                cmap=mcolors.LinearSegmentedColormap.from_list("my_colormap", ["#FFFFFF", "#95D3A2"]),
+                extent=extent, aspect="equal"
+            )
+            ax_c.set_title(r'Concentration $c$')
+            plt.colorbar(im_c, ax=ax_c)
+            ax_c.set_xlabel('x')
+            ax_c.set_ylabel('y')
+
+    @property
+    def gradC(self) -> npt.NDArray:
+        grad_x = (np.roll(self.c, -1, axis=0) - np.roll(self.c, 1, axis=0)) / (2 * self.dx)
+        grad_y = (np.roll(self.c, -1, axis=1) - np.roll(self.c, 1, axis=1)) / (2 * self.dx)
+        return np.stack((grad_x, grad_y), axis=-1)
+
+    @property
+    def gradRho(self) -> npt.NDArray:
+        grad_x = (np.roll(self.rho, -1, axis=0) - np.roll(self.rho, 1, axis=0)) / (2 * self.dx)
+        grad_y = (np.roll(self.rho, -1, axis=1) - np.roll(self.rho, 1, axis=1)) / (2 * self.dx)
+        return np.stack((grad_x, grad_y), axis=-1)
+
+    def _divergence(self, vec_field: npt.NDArray) -> npt.NDArray:
+        """
+        Calc the divergence (nabla ·) of a vector field vec_field with shape (..., 2).
+        Returns a scalar field.
+        """
+        # vec_field[..., 0] is the x-component, vec_field[..., 1] is the y-component
+        comp_x = vec_field[..., 0]
+        comp_y = vec_field[..., 1]
+
+        div_x = (np.roll(comp_x, -1, axis=0) - np.roll(comp_x, 1, axis=0)) / (2 * self.dx)
+        div_y = (np.roll(comp_y, -1, axis=1) - np.roll(comp_y, 1, axis=1)) / (2 * self.dx)
+        return div_x + div_y
+
+    @property
+    def advectionTerm(self) -> npt.NDArray:
+        """
+        -nabla · (alpha * rho * nabla c)
+        """
+        # J = alpha * rho * nabla c
+        flux = self.chemoAlpha * self.rho[..., np.newaxis] * self.temp["grad_c"]
+        # -nabla · J
+        return - self._divergence(flux)
+
+    @property
+    def diffusionTermRho(self) -> npt.NDArray:
+        """D * nabla^2 rho"""
+        return self.partiDiffD * self._laplacian(self.rho)
+
+    def _laplacian(self, field: npt.NDArray) -> npt.NDArray:
+        center = -field
+        direct_neighbors = 0.20 * (
+                np.roll(field, 1, axis=0)
+                + np.roll(field, -1, axis=0)
+                + np.roll(field, 1, axis=1)
+                + np.roll(field, -1, axis=1)
+        )
+        diagonal_neighbors = 0.05 * (
+                np.roll(np.roll(field, 1, axis=0), 1, axis=1)
+                + np.roll(np.roll(field, -1, axis=0), 1, axis=1)
+                + np.roll(np.roll(field, -1, axis=0), -1, axis=1)
+                + np.roll(np.roll(field, 1, axis=0), -1, axis=1)
+        )
+        out_array = center + direct_neighbors + diagonal_neighbors
+        return out_array / (self.dx ** 2)
+
+    @property
+    def dotRho(self) -> npt.NDArray:
+        """
+        dot{rho} = -nabla · (alpha * rho * nabla c) + D * nabla^2 rho
+        """
+        return self.advectionTerm + self.diffusionTermRho
+
+    @property
+    def diffusionTermC(self) -> npt.NDArray:
+        """D_c * nabla^2 c"""
+        return self.chemoDiffDc * self._laplacian(self.c)
+
+    @property
+    def reactionTermC(self) -> npt.NDArray:
+        """mu * c + k * rho"""
+        return self.mu * self.c + self.prodRateK * self.rho
+
+    @property
+    def dotC(self) -> npt.NDArray:
+        """
+        dot{c} = D_c * nabla^2 c + mu * c + k * rho
+        """
+        return self.diffusionTermC + self.reactionTermC
+
+    def update(self):
+        self.temp["grad_c"] = self.gradC
+        self.temp["grad_rho"] = self.gradRho
+        self.temp["dotC"] = self.dotC
+        self.temp["dotRho"] = self.dotRho
+
+        self.rho += self.temp["dotRho"] * self.dt
+        self.c += self.temp["dotC"] * self.dt
+
+        self.rho[self.rho < 0] = 0
+        self.c[self.c < 0] = 0
+
+        self.counts += 1
+
+    def append(self):
+        if hasattr(self, 'store') and self.store is not None:
+            if self.counts % self.shotsnaps != 0:
+                return
+            self.store.append(key="rho", value=pd.DataFrame(self.rho))
+            self.store.append(key="c", value=pd.DataFrame(self.c))
+
+    def __str__(self) -> str:
+        name = (
+            f"{self.__class__.__name__}_"
+            f"alpha{self.chemoAlpha:.1f},D{self.partiDiffD:.3f},"
+            f"k{self.prodRateK:.3f},mu{self.mu:.3f},Dc{self.chemoDiffDc:.3f},"
+            f"L{self.boundaryLength:.1f},cN{self.cellNumInLine},"
+            f"dt{self.dt:.3f},s{self.shotsnaps},"
+            f"seed{self.randomSeed}"
+        )
         return name
