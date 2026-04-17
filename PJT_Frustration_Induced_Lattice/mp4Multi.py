@@ -13,7 +13,7 @@ import shutil
 import sys
 sys.path.append("..")
 
-from PJT_Frustration_Induced_Crystallize.main import *
+from main import *
 
 new_cmap = mcolors.LinearSegmentedColormap.from_list(
     "new", plt.cm.jet(np.linspace(0, 1, 256)) * 0.85, N=256
