@@ -92,7 +92,7 @@ class ParticleBasedChemotaxis(Swarmalators2D):
                 self.c.T, origin="lower", cmap=cmap, 
                 extent=(0, self.boundaryLength, 0, self.boundaryLength)
             )
-            plt.colorbar(im, ax=ax, label="Chemoattractant Concentration")
+            plt.colorbar(im, ax=ax, label="Concentration $c$")
 
         norm = np.linalg.norm(self.temp["dotR"], axis=1, keepdims=True)
         norm[norm == 0] = 1
@@ -276,8 +276,8 @@ class ContinuumChemotaxis(Swarmalators2D):
             )
             ax_rho.set_title(r'Particle Density $\rho$')
             plt.colorbar(im_rho, ax=ax_rho)
-            ax_rho.set_xlabel('x')
-            ax_rho.set_ylabel('y')
+            ax_rho.set_xlabel('$x$')
+            ax_rho.set_ylabel('$y$')
 
         if ax_c is not None:
             im_c = ax_c.imshow(
@@ -287,8 +287,8 @@ class ContinuumChemotaxis(Swarmalators2D):
             )
             ax_c.set_title(r'Concentration $c$')
             plt.colorbar(im_c, ax=ax_c)
-            ax_c.set_xlabel('x')
-            ax_c.set_ylabel('y')
+            ax_c.set_xlabel('$x$')
+            ax_c.set_ylabel('$y$')
 
     @property
     def gradC(self) -> npt.NDArray:
